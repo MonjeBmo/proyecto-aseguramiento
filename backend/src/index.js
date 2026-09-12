@@ -55,7 +55,7 @@ async function start() {
       // Evitar llamar a seed.js directamente (cierra pool); inline seed basico
       const { execSync } = require('child_process');
       try {
-        execSync('node src/config/seed.js', { stdio: 'inherit', cwd: __dirname + '/../..' });
+        execSync('node src/config/seed.js', { stdio: 'inherit', cwd: __dirname + '/..' });
       } catch (_e) {
         console.warn('[Seed] No se pudo auto-seedear. Ejecuta: npm run seed');
       }
