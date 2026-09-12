@@ -33,7 +33,7 @@ type Paso = 'cliente' | 'productos' | 'resumen';
  */
 export default function CapturaPedidoScreen() {
   const navigation = useNavigation<NavProp>();
-  const { usuario, isOnline } = useApp();
+  const { usuario, isOnline, setUsuario } = useApp();
 
   const [paso, setPaso] = useState<Paso>('cliente');
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
@@ -271,10 +271,15 @@ export default function CapturaPedidoScreen() {
           <Text style={styles.headerTitulo}>Nuevo pedido</Text>
           <Text style={styles.headerSub}>{usuario?.nombre}</Text>
         </View>
-        <TouchableOpacity onPress={() => navigation.navigate('Catalogo')} style={styles.btnCatalogo}>
-          <Ionicons name="list-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.btnCatalogoTexto}>Catalogo</Text>
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <TouchableOpacity onPress={() => navigation.navigate('Catalogo')} style={styles.btnCatalogo}>
+            <Ionicons name="list-outline" size={20} color={COLORS.primary} />
+            <Text style={styles.btnCatalogoTexto}>Catalogo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setUsuario(null)} style={styles.btnSalir}>
+            <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Indicador de pasos */}
@@ -356,8 +361,10 @@ const styles = StyleSheet.create({
   },
   headerTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.text },
   headerSub: { fontSize: 13, color: COLORS.textLight, marginTop: 1 },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   btnCatalogo: { flexDirection: 'row', alignItems: 'center', gap: 4, padding: 8 },
   btnCatalogoTexto: { fontSize: 14, color: COLORS.primary, fontWeight: '600' },
+  btnSalir: { padding: 8 },
 
   pasosRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
