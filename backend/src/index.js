@@ -7,6 +7,7 @@ const pool = require('./config/database');
 const authRoutes = require('./routes/auth');
 const productosRoutes = require('./routes/productos');
 const pedidosRoutes = require('./routes/pedidos');
+const entregasRoutes = require('./routes/entregas');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,6 +30,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/auth',      authRoutes);
 app.use('/api/productos', productosRoutes);
 app.use('/api/pedidos',   pedidosRoutes);
+app.use('/api/entregas',  entregasRoutes);
 
 // ── Manejo de errores global ──────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
