@@ -20,6 +20,8 @@ async function obtenerEntregasPorRepartidor(repartidorId) {
        c.telefono AS cliente_telefono,
        c.direccion AS cliente_direccion,
        c.zona     AS cliente_zona,
+       c.lat      AS cliente_lat,
+       c.lng      AS cliente_lng,
        u.nombre   AS vendedor_nombre
      FROM pedidos p
      JOIN clientes c ON p.cliente_id  = c.id

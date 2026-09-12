@@ -121,10 +121,18 @@ export default function RutaDiariaScreen() {
 
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitulo}>Mi ruta del dia</Text>
           <Text style={styles.headerSub}>{usuario?.nombre}</Text>
         </View>
+        <TouchableOpacity
+          style={styles.btnMapa}
+          onPress={() => navigation.navigate('MapaRuta', { entregas })}
+          disabled={entregas.length === 0}
+        >
+          <Ionicons name="map-outline" size={18} color={COLORS.primary} />
+          <Text style={styles.btnMapaTexto}>Mapa</Text>
+        </TouchableOpacity>
         <View style={styles.contadorBadge}>
           <Text style={styles.contadorNum}>{pendientes}</Text>
           <Text style={styles.contadorLabel}>pendientes</Text>
@@ -255,6 +263,15 @@ const styles = StyleSheet.create({
   vacio: { alignItems: 'center', paddingTop: 80, gap: 10 },
   vacioTitulo: { fontSize: 18, fontWeight: '700', color: COLORS.text },
   vacioSub: { fontSize: 14, color: COLORS.textLight, textAlign: 'center' },
+
+  btnMapa: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: COLORS.primary + '15', borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderWidth: 1, borderColor: COLORS.primary + '40',
+    marginRight: 10,
+  },
+  btnMapaTexto: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
 
   btnSalir: {
     position: 'absolute', bottom: 20, right: 20,
