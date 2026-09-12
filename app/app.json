@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "RutaExpress GT",
+    "slug": "rutaexpress-gt",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0D2137"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "gt.rutaexpress.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0D2137"
+      },
+      "package": "gt.rutaexpress.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-sqlite",
+        {
+          "enableFTS": false
+        }
+      ]
+    ]
+  }
+}
