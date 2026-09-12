@@ -15,9 +15,17 @@ import ConfirmacionScreen from '../screens/ConfirmacionScreen';
 // Repartidor
 import RutaDiariaScreen from '../screens/RutaDiariaScreen';
 import DetalleEntregaScreen from '../screens/DetalleEntregaScreen';
+import MapaRutaScreen from '../screens/MapaRutaScreen';
+
+// Supervisor / Admin
+import AdminDashboardScreen from '../screens/admin/AdminDashboardScreen';
+import ProductosAdminScreen from '../screens/admin/ProductosAdminScreen';
+import ClientesAdminScreen from '../screens/admin/ClientesAdminScreen';
+import PedidosAdminScreen from '../screens/admin/PedidosAdminScreen';
+import NotificacionesScreen from '../screens/admin/NotificacionesScreen';
+import UsuariosAdminScreen from '../screens/admin/UsuariosAdminScreen';
 
 export type RootStackParamList = {
-  // Compartida
   Login: undefined;
 
   // Vendedor
@@ -28,6 +36,15 @@ export type RootStackParamList = {
   // Repartidor
   RutaDiaria: undefined;
   DetalleEntrega: { entrega: Entrega };
+  MapaRuta: { entregas: Entrega[] };
+
+  // Supervisor
+  AdminDashboard: undefined;
+  ProductosAdmin: undefined;
+  ClientesAdmin: undefined;
+  PedidosAdmin: undefined;
+  Notificaciones: undefined;
+  UsuariosAdmin: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -56,6 +73,16 @@ export default function AppNavigator() {
           <>
             <Stack.Screen name="RutaDiaria" component={RutaDiariaScreen} />
             <Stack.Screen name="DetalleEntrega" component={DetalleEntregaScreen} />
+            <Stack.Screen name="MapaRuta" component={MapaRutaScreen} />
+          </>
+        ) : usuario.rol === 'supervisor' ? (
+          <>
+            <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+            <Stack.Screen name="ProductosAdmin" component={ProductosAdminScreen} />
+            <Stack.Screen name="ClientesAdmin" component={ClientesAdminScreen} />
+            <Stack.Screen name="PedidosAdmin" component={PedidosAdminScreen} />
+            <Stack.Screen name="Notificaciones" component={NotificacionesScreen} />
+            <Stack.Screen name="UsuariosAdmin" component={UsuariosAdminScreen} />
           </>
         ) : null}
       </Stack.Navigator>

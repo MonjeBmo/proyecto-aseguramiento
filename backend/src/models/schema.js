@@ -50,6 +50,17 @@ const SCHEMA_SQL = `
     subtotal        NUMERIC(10,2) NOT NULL CHECK (subtotal >= 0)
   );
 
+  CREATE TABLE IF NOT EXISTS lotes (
+    id                  SERIAL PRIMARY KEY,
+    producto_id         INTEGER NOT NULL REFERENCES productos(id),
+    cantidad_inicial    INTEGER NOT NULL CHECK (cantidad_inicial > 0),
+    cantidad_disponible INTEGER NOT NULL CHECK (cantidad_disponible >= 0),
+    costo_unitario      NUMERIC(10,2),
+    fecha_entrada       DATE NOT NULL DEFAULT CURRENT_DATE,
+    notas               TEXT,
+    creado_en           TIMESTAMP DEFAULT NOW()
+  );
+
   CREATE TABLE IF NOT EXISTS notificaciones (
     id         SERIAL PRIMARY KEY,
     pedido_id  INTEGER NOT NULL REFERENCES pedidos(id),
@@ -62,7 +73,9 @@ const SCHEMA_SQL = `
     creado_en  TIMESTAMP DEFAULT NOW()
   );
 
-  ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS repartidor_id INTEGER REFERENCES usuarios(id);
+  ALTER TABLE pedidos   ADD COLUMN IF NOT EXISTS repartidor_id INTEGER REFERENCES usuarios(id);
+  ALTER TABLE clientes  ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+  ALTER TABLE clientes  ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
 `;
 
 async function initSchema() {

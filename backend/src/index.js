@@ -8,6 +8,9 @@ const authRoutes = require('./routes/auth');
 const productosRoutes = require('./routes/productos');
 const pedidosRoutes = require('./routes/pedidos');
 const entregasRoutes = require('./routes/entregas');
+const clientesRoutes = require('./routes/clientes');
+const usuariosRoutes = require('./routes/usuarios');
+const lotesRoutes    = require('./routes/lotes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -31,6 +34,9 @@ app.use('/api/auth',      authRoutes);
 app.use('/api/productos', productosRoutes);
 app.use('/api/pedidos',   pedidosRoutes);
 app.use('/api/entregas',  entregasRoutes);
+app.use('/api/clientes',  clientesRoutes);
+app.use('/api/usuarios',  usuariosRoutes);
+app.use('/api/lotes',     lotesRoutes);
 
 // ── Manejo de errores global ──────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {

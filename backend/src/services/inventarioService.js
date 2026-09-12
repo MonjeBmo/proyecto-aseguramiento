@@ -2,10 +2,7 @@ const pool = require('../config/database');
 
 /**
  * Verifica que todos los items del pedido tengan stock suficiente.
- * Esta validacion es el control de Safety ISO 25010: evita sobreventa.
- *
- * @param {Array<{producto_id: number, cantidad: number}>} items
- * @returns {Promise<{ok: boolean, mensaje?: string, producto?: string}>}
+ * Safety ISO 25010: evita sobreventa.
  */
 async function verificarStock(items) {
   if (!Array.isArray(items) || items.length === 0) {
@@ -45,27 +42,69 @@ async function verificarStock(items) {
 }
 
 /**
- * Descuenta el stock de cada producto. Debe llamarse dentro de una transaccion.
+ * Descuenta el stock usando PEPS (Primeras Entradas, Primeras Salidas / FIFO).
+ * Si el producto tiene lotes registrados, consume del lote mas antiguo primero.
+ * Si no tiene lotes (productos sin gestion PEPS), descuenta directo del stock.
  *
- * @param {Array<{producto_id: number, cantidad: number}>} items
- * @param {import('pg').PoolClient} client - cliente de transaccion pg
+ * Debe llamarse dentro de una transaccion.
  */
 async function descontarStock(items, client) {
   for (const item of items) {
-    const result = await client.query(
-      `UPDATE productos
-          SET stock = stock - $1
-        WHERE id = $2 AND stock >= $1
-        RETURNING id, nombre, stock`,
-      [item.cantidad, item.producto_id]
+    const { producto_id, cantidad } = item;
+
+    // Buscar lotes con stock disponible, orden PEPS (fecha_entrada ASC)
+    const { rows: lotes } = await client.query(
+      `SELECT id, cantidad_disponible
+       FROM lotes
+       WHERE producto_id = $1 AND cantidad_disponible > 0
+       ORDER BY fecha_entrada ASC, id ASC`,
+      [producto_id]
     );
 
-    // Doble verificacion: si UPDATE no afecto filas, el stock cayo en carrera
-    if (result.rowCount === 0) {
-      throw Object.assign(
-        new Error(`Stock insuficiente en la validacion final para producto ID ${item.producto_id}.`),
-        { code: 'STOCK_RACE_CONDITION' }
+    if (lotes.length > 0) {
+      // ── PEPS: consumir del lote mas antiguo primero ──────────────────────────
+      let restante = cantidad;
+
+      for (const lote of lotes) {
+        if (restante <= 0) break;
+        const tomar = Math.min(lote.cantidad_disponible, restante);
+        await client.query(
+          'UPDATE lotes SET cantidad_disponible = cantidad_disponible - $1 WHERE id = $2',
+          [tomar, lote.id]
+        );
+        restante -= tomar;
+      }
+
+      if (restante > 0) {
+        throw Object.assign(
+          new Error(`Stock insuficiente en lotes PEPS para producto ID ${producto_id}.`),
+          { code: 'STOCK_RACE_CONDITION' }
+        );
+      }
+
+      // Sincronizar stock del producto con la suma real de los lotes
+      await client.query(
+        `UPDATE productos
+            SET stock = (SELECT COALESCE(SUM(cantidad_disponible), 0) FROM lotes WHERE producto_id = $1)
+          WHERE id = $1`,
+        [producto_id]
       );
+    } else {
+      // ── Sin lotes: descuento directo con doble verificacion de race condition
+      const result = await client.query(
+        `UPDATE productos
+            SET stock = stock - $1
+          WHERE id = $2 AND stock >= $1
+          RETURNING id`,
+        [cantidad, producto_id]
+      );
+
+      if (result.rowCount === 0) {
+        throw Object.assign(
+          new Error(`Stock insuficiente en la validacion final para producto ID ${producto_id}.`),
+          { code: 'STOCK_RACE_CONDITION' }
+        );
+      }
     }
   }
 }

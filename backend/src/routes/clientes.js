@@ -1,9 +1,8 @@
 const { Router } = require('express');
-const { listar, listarTodos, obtenerPorId, crear, actualizar, eliminar } = require('../controllers/productosController');
+const { listar, obtenerPorId, crear, actualizar, eliminar } = require('../controllers/clientesController');
 
 const router = Router();
 
-router.get('/admin/todos', listarTodos);
 router.get('/', listar);
 router.get('/:id', obtenerPorId);
 router.post('/', crear);
