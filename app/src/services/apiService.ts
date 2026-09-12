@@ -3,7 +3,7 @@ import { Usuario } from '../data/mockData';
 // Ajusta esta URL con la IP de tu maquina al usar Expo en dispositivo fisico
 // Para emulador Android: http://10.0.2.2:3000
 // Para emulador iOS / dispositivo: http://TU_IP_LOCAL:3000
-const API_URL = 'http://192.168.1.100:3000';
+const API_URL = 'http://localhost:3000';
 
 const TIMEOUT_MS = 8000;
 

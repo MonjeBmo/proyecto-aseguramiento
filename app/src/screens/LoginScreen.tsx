@@ -1,170 +1,213 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
+  View, Text, TextInput, StyleSheet, TouchableOpacity,
+  SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
 import { useApp } from '../context/AppContext';
-import { MOCK_USUARIOS, Usuario } from '../data/mockData';
+import { loginApi } from '../services/apiService';
+import { MOCK_USUARIOS, MOCK_CREDENCIALES } from '../data/mockData';
 import { COLORS } from '../constants/colors';
 
-/**
- * Pantalla de seleccion de usuario.
- * Para el prototipo no hay contrasena — el vendedor simplemente selecciona su nombre.
- * En produccion se reemplaza con email + password + JWT.
- *
- * ISO 25010 — Usabilidad: menos de 2 pasos para ingresar, iconografia clara.
- * ISO 25010 — Adecuacion funcional: control de acceso por rol (solo vendedores en la app).
- */
 export default function LoginScreen() {
   const { setUsuario } = useApp();
 
-  const handleSeleccionar = (usuario: Usuario) => {
-    setUsuario(usuario);
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [mostrarPass, setMostrarPass] = useState(false);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError]       = useState<string | null>(null);
+
+  const handleLogin = async () => {
+    const emailLower = email.trim().toLowerCase();
+    if (!emailLower || !password) {
+      setError('Email y contraseña son obligatorios.');
+      return;
+    }
+    setCargando(true);
+    setError(null);
+
+    try {
+      const { usuario } = await loginApi(emailLower, password);
+      setUsuario(usuario);
+    } catch (err: any) {
+      // Si el backend no está disponible, intentar con mock local
+      if (err.name === 'AbortError' || err.message?.includes('fetch') || err.message?.includes('network')) {
+        const passEsperado = MOCK_CREDENCIALES[emailLower];
+        const usuarioMock  = MOCK_USUARIOS.find(u => u.email === emailLower);
+        if (passEsperado && passEsperado === password && usuarioMock) {
+          setUsuario(usuarioMock);
+          return;
+        }
+        setError('Sin conexión y las credenciales no coinciden con el modo offline.');
+      } else {
+        setError(err.message || 'Credenciales incorrectas.');
+      }
+    } finally {
+      setCargando(false);
+    }
   };
 
-  const renderUsuario = ({ item }: { item: Usuario }) => (
-    <TouchableOpacity
-      style={styles.tarjeta}
-      onPress={() => handleSeleccionar(item)}
-      activeOpacity={0.75}
-    >
-      <View style={styles.avatar}>
-        <Ionicons name="person" size={28} color={COLORS.primary} />
-      </View>
-      <View style={styles.info}>
-        <Text style={styles.nombre}>{item.nombre}</Text>
-        <Text style={styles.rol}>Vendedor de ruta</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
-    </TouchableOpacity>
-  );
+  const loginRapido = (em: string, pw: string) => {
+    setEmail(em);
+    setPassword(pw);
+  };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.dark} />
+    <SafeAreaView style={styles.safe}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.logoRow}>
-          <Ionicons name="cube" size={32} color={COLORS.accent} />
-          <Text style={styles.logoText}>RutaExpress GT</Text>
-        </View>
-        <Text style={styles.subtitulo}>Selecciona tu perfil para continuar</Text>
-      </View>
+          {/* Logo */}
+          <View style={styles.header}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="cube" size={36} color={COLORS.accent} />
+            </View>
+            <Text style={styles.titulo}>RutaExpress GT</Text>
+            <Text style={styles.subtitulo}>Sistema de distribución mayorista</Text>
+          </View>
 
-      {/* Lista de vendedores */}
-      <View style={styles.cuerpo}>
-        <Text style={styles.seccionTitulo}>Vendedores activos</Text>
-        <FlatList
-          data={MOCK_USUARIOS}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderUsuario}
-          contentContainerStyle={styles.lista}
-          ItemSeparatorComponent={() => <View style={styles.separador} />}
-        />
-      </View>
+          {/* Formulario */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitulo}>Iniciar sesión</Text>
 
-      <Text style={styles.version}>Prototipo v1.0 — Sprint 1</Text>
+            {error && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle-outline" size={15} color={COLORS.error} />
+                <Text style={styles.errorTexto}>{error}</Text>
+              </View>
+            )}
+
+            <Text style={styles.label}>Correo electrónico</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="usuario@rutaexpress.gt"
+              placeholderTextColor={COLORS.textLight}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoCorrect={false}
+            />
+
+            <Text style={styles.label}>Contraseña</Text>
+            <View style={styles.passRow}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••"
+                placeholderTextColor={COLORS.textLight}
+                secureTextEntry={!mostrarPass}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity style={styles.eyeBtn} onPress={() => setMostrarPass(p => !p)}>
+                <Ionicons name={mostrarPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={COLORS.textLight} />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.btnLogin, cargando && styles.btnDisabled]}
+              onPress={handleLogin}
+              disabled={cargando}
+              activeOpacity={0.8}
+            >
+              {cargando
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.btnLoginTexto}>Ingresar</Text>
+              }
+            </TouchableOpacity>
+          </View>
+
+          {/* Accesos rápidos para demo */}
+          <View style={styles.demo}>
+            <Text style={styles.demoTitulo}>Accesos rápidos (demo)</Text>
+            <View style={styles.demoGrid}>
+              {[
+                { label: 'Vendedor',     email: 'carlos@rutaexpress.gt', pass: '1234',      icon: 'storefront-outline' as const },
+                { label: 'Repartidor',   email: 'pedro@rutaexpress.gt',  pass: '1234',      icon: 'bicycle-outline' as const },
+                { label: 'Supervisor',   email: 'admin@rutaexpress.gt',  pass: 'admin1234', icon: 'shield-checkmark-outline' as const },
+                { label: 'Vendedora 2',  email: 'maria@rutaexpress.gt',  pass: '1234',      icon: 'person-outline' as const },
+              ].map(u => (
+                <TouchableOpacity
+                  key={u.email}
+                  style={styles.demoBtn}
+                  onPress={() => loginRapido(u.email, u.pass)}
+                >
+                  <Ionicons name={u.icon} size={18} color={COLORS.primary} />
+                  <Text style={styles.demoBtnLabel}>{u.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.demoHint}>Toca un acceso rápido para llenar las credenciales</Text>
+          </View>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
+  safe: { flex: 1, backgroundColor: COLORS.dark },
+  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+
+  header: { alignItems: 'center', marginBottom: 32 },
+  logoCircle: {
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: COLORS.dark,
+    borderWidth: 2, borderColor: COLORS.accent + '55',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
   },
-  header: {
-    paddingTop: 40,
-    paddingBottom: 30,
-    paddingHorizontal: 24,
-    alignItems: 'center',
+  titulo: { fontSize: 26, fontWeight: '800', color: COLORS.textOnDark, letterSpacing: 0.5 },
+  subtitulo: { fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 4 },
+
+  card: {
+    backgroundColor: COLORS.surface, borderRadius: 20,
+    padding: 24, marginBottom: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15, shadowRadius: 12, elevation: 6,
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
+  cardTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 20 },
+
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: COLORS.error + '15', borderRadius: 8,
+    padding: 10, marginBottom: 16,
+    borderWidth: 1, borderColor: COLORS.error + '33',
   },
-  logoText: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: COLORS.textOnDark,
-    letterSpacing: 0.5,
+  errorTexto: { fontSize: 13, color: COLORS.error, flex: 1 },
+
+  label: { fontSize: 13, fontWeight: '600', color: COLORS.textLight, marginBottom: 6 },
+  input: {
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: 10,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, color: COLORS.text, backgroundColor: COLORS.background,
+    marginBottom: 16,
   },
-  subtitulo: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.65)',
-    textAlign: 'center',
+  passRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 24 },
+  eyeBtn: { padding: 10 },
+
+  btnLogin: {
+    backgroundColor: COLORS.primary, borderRadius: 12,
+    paddingVertical: 15, alignItems: 'center',
   },
-  cuerpo: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingTop: 24,
+  btnDisabled: { opacity: 0.6 },
+  btnLoginTexto: { color: '#fff', fontSize: 16, fontWeight: '700' },
+
+  demo: {
+    backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 16,
+    padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
   },
-  seccionTitulo: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textLight,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    paddingHorizontal: 20,
-    marginBottom: 12,
+  demoTitulo: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.5)', letterSpacing: 1, marginBottom: 12 },
+  demoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  demoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.surface, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 9,
+    borderWidth: 1, borderColor: COLORS.border,
   },
-  lista: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-  },
-  tarjeta: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 14,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#E8F4FD',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  info: {
-    flex: 1,
-  },
-  nombre: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  rol: {
-    fontSize: 13,
-    color: COLORS.textLight,
-  },
-  separador: {
-    height: 10,
-  },
-  version: {
-    textAlign: 'center',
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.35)',
-    paddingBottom: 16,
-    backgroundColor: COLORS.background,
-  },
+  demoBtnLabel: { fontSize: 13, fontWeight: '600', color: COLORS.text },
+  demoHint: { fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 10, textAlign: 'center' },
 });

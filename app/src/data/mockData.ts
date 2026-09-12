@@ -43,16 +43,27 @@ export interface Entrega {
   cliente_telefono: string;
   cliente_direccion: string;
   cliente_zona: string;
+  cliente_lat?: number | null;
+  cliente_lng?: number | null;
   vendedor_nombre: string;
   creado_en: string;
   items: EntregaItem[];
 }
 
 export const MOCK_USUARIOS: Usuario[] = [
-  { id: 1, nombre: 'Carlos Revolorio', email: 'carlos@rutaexpress.gt', rol: 'vendedor' },
-  { id: 2, nombre: 'Maria Garcia',     email: 'maria@rutaexpress.gt',  rol: 'vendedor' },
-  { id: 4, nombre: 'Pedro Lopez',      email: 'pedro@rutaexpress.gt',  rol: 'repartidor' },
+  { id: 1, nombre: 'Carlos Revolorio',  email: 'carlos@rutaexpress.gt', rol: 'vendedor' },
+  { id: 2, nombre: 'Maria Garcia',      email: 'maria@rutaexpress.gt',  rol: 'vendedor' },
+  { id: 3, nombre: 'Admin RutaExpress', email: 'admin@rutaexpress.gt',  rol: 'supervisor' },
+  { id: 4, nombre: 'Pedro Lopez',       email: 'pedro@rutaexpress.gt',  rol: 'repartidor' },
 ];
+
+// Credenciales mock para modo offline
+export const MOCK_CREDENCIALES: Record<string, string> = {
+  'carlos@rutaexpress.gt': '1234',
+  'maria@rutaexpress.gt':  '1234',
+  'admin@rutaexpress.gt':  'admin1234',
+  'pedro@rutaexpress.gt':  '1234',
+};
 
 export const MOCK_CLIENTES: Cliente[] = [
   { id: 1, nombre: 'Tienda La Esperanza',  telefono: '5555-1001', zona: 'Zona 6',  direccion: '5a Av. 10-20' },

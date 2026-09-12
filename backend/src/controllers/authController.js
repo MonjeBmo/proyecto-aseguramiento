@@ -5,6 +5,7 @@ const CREDENCIALES_MOCK = {
   'carlos@rutaexpress.gt': '1234',
   'maria@rutaexpress.gt':  '1234',
   'admin@rutaexpress.gt':  'admin1234',
+  'pedro@rutaexpress.gt':  '1234',
 };
 
 /**
