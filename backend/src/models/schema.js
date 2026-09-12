@@ -33,6 +33,7 @@ const SCHEMA_SQL = `
     id              SERIAL PRIMARY KEY,
     cliente_id      INTEGER NOT NULL REFERENCES clientes(id),
     vendedor_id     INTEGER NOT NULL REFERENCES usuarios(id),
+    repartidor_id   INTEGER REFERENCES usuarios(id),
     estado          TEXT NOT NULL DEFAULT 'confirmado'
                       CHECK (estado IN ('confirmado', 'despachado', 'entregado', 'cancelado')),
     total           NUMERIC(10,2) NOT NULL CHECK (total >= 0),
@@ -48,6 +49,20 @@ const SCHEMA_SQL = `
     precio_unitario NUMERIC(10,2) NOT NULL CHECK (precio_unitario >= 0),
     subtotal        NUMERIC(10,2) NOT NULL CHECK (subtotal >= 0)
   );
+
+  CREATE TABLE IF NOT EXISTS notificaciones (
+    id         SERIAL PRIMARY KEY,
+    pedido_id  INTEGER NOT NULL REFERENCES pedidos(id),
+    cliente_id INTEGER NOT NULL REFERENCES clientes(id),
+    telefono   TEXT NOT NULL,
+    mensaje    TEXT NOT NULL,
+    canal      TEXT NOT NULL DEFAULT 'whatsapp',
+    estado     TEXT NOT NULL DEFAULT 'simulado'
+                 CHECK (estado IN ('simulado', 'enviado', 'error')),
+    creado_en  TIMESTAMP DEFAULT NOW()
+  );
+
+  ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS repartidor_id INTEGER REFERENCES usuarios(id);
 `;
 
 async function initSchema() {
