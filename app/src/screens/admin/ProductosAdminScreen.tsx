@@ -1,13 +1,15 @@
+import { fechaGuatemala, fechaValida } from '../../utils/fechaEntregas';
+import { normalizarBusqueda } from '../../utils/busqueda';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView,
-  Modal, TextInput, ScrollView, Alert, ActivityIndicator, RefreshControl,
+  Modal, TextInput, ScrollView, Alert, ActivityIndicator, RefreshControl, Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { COLORS } from '../../constants/colors';
-import { productosAdmin, ProductoAdmin, lotesAdmin, Lote } from '../../services/adminApiService';
+import { productosAdmin, ProductoAdmin, lotesAdmin, Lote, proveedoresAdmin, Proveedor } from '../../services/adminApiService';
 import { useApp } from '../../context/AppContext';
 import Select, { SelectOption } from '../../components/Select';
 
@@ -44,6 +46,7 @@ export default function ProductosAdminScreen() {
   const { setUsuario } = useApp();
 
   // Lista de productos
+  const [busqueda, setBusqueda] = useState('');
   const [productos, setProductos] = useState<ProductoAdmin[]>([]);
   const [cargando, setCargando]   = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -63,7 +66,8 @@ export default function ProductosAdminScreen() {
   const [modalLotes, setModalLotes]       = useState(false);
 
   // Formulario nueva entrada de lote
-  const [formLote, setFormLote]       = useState({ cantidad: '', costo: '', fecha: '', notas: '' });
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [formLote, setFormLote]       = useState({ cantidad: '', costo: '', fecha: fechaGuatemala(), notas: '', proveedor: '' });
   const [guardandoLote, setGuardandoLote] = useState(false);
   const [loteError, setLoteError]     = useState<string | null>(null);
   const [mostrarFormLote, setMostrarFormLote] = useState(false);
@@ -81,7 +85,8 @@ export default function ProductosAdminScreen() {
     }
   }, []);
 
-  useEffect(() => { cargar(); }, [cargar]);
+  useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+  const filtrados = productos.filter(p => normalizarBusqueda(`${p.nombre} ${p.descripcion || ''} ${p.categoria || ''}`).includes(normalizarBusqueda(busqueda)));
 
   // ── Producto CRUD ─────────────────────────────────────────────────────────
   const abrirCrear = () => {
@@ -107,9 +112,13 @@ export default function ProductosAdminScreen() {
       setFormError('Nombre y precio son obligatorios.');
       return;
     }
+    if (form.nombre.trim().length < 2) {
+      setFormError('El nombre debe tener al menos 2 caracteres.');
+      return;
+    }
     const precio = parseFloat(form.precio);
     if (isNaN(precio) || precio < 0) {
-      setFormError('El precio debe ser un número válido.');
+      setFormError('El precio debe ser un número mayor o igual a 0.');
       return;
     }
     setGuardando(true);
@@ -162,7 +171,8 @@ export default function ProductosAdminScreen() {
     setProductoLotes(p);
     setModalLotes(true);
     setMostrarFormLote(false);
-    setFormLote({ cantidad: '', costo: '', fecha: '', notas: '' });
+    proveedoresAdmin.listar().then(setProveedores).catch(() => setLoteError('No se pudieron cargar los proveedores.'));
+    setFormLote({ cantidad: '', costo: '', fecha: fechaGuatemala(), notas: '', proveedor: '' });
     setLoteError(null);
     setCargandoLotes(true);
     try {
@@ -175,6 +185,7 @@ export default function ProductosAdminScreen() {
   };
 
   const agregarLote = async () => {
+    if (!fechaValida(formLote.fecha)) { setLoteError('Selecciona una fecha de entrada válida.'); return; }
     if (!formLote.cantidad || parseInt(formLote.cantidad) <= 0) {
       setLoteError('La cantidad debe ser mayor a 0.');
       return;
@@ -188,6 +199,7 @@ export default function ProductosAdminScreen() {
         costo_unitario: formLote.costo ? parseFloat(formLote.costo) : null,
         fecha_entrada: formLote.fecha || undefined,
         notas: formLote.notas || undefined,
+        proveedor_id: formLote.proveedor ? Number(formLote.proveedor) : undefined,
       });
       setLotes(prev => [...prev, nuevo].sort((a, b) =>
         a.fecha_entrada.localeCompare(b.fecha_entrada) || a.id - b.id
@@ -198,7 +210,7 @@ export default function ProductosAdminScreen() {
           ? { ...p, stock: p.stock + parseInt(formLote.cantidad) }
           : p
       ));
-      setFormLote({ cantidad: '', costo: '', fecha: '', notas: '' });
+      setFormLote({ cantidad: '', costo: '', fecha: fechaGuatemala(), notas: '', proveedor: '' });
       setMostrarFormLote(false);
     } catch (e: any) {
       setLoteError(e.message);
@@ -294,6 +306,7 @@ export default function ProductosAdminScreen() {
         </View>
 
         <View style={styles.loteGrid}>
+          {item.proveedor_id && <LoteInfo label="Proveedor" valor={item.proveedor_nombre || proveedores.find(p => p.id === item.proveedor_id)?.nombre || '—'} icono="business-outline" />}
           <LoteInfo label="Entrada" valor={formatFecha(item.fecha_entrada)} icono="calendar-outline" />
           <LoteInfo label="Inicial" valor={`${item.cantidad_inicial} ${item.unidad}`} icono="cube-outline" />
           <LoteInfo label="Disponible" valor={`${item.cantidad_disponible} ${item.unidad}`} icono="checkmark-circle-outline" />
@@ -349,8 +362,14 @@ export default function ProductosAdminScreen() {
 
       {error && <View style={styles.errorBanner}><Text style={styles.errorTexto}>{error}</Text></View>}
 
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, margin: 12, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10 }}>
+        <Ionicons name="search-outline" size={18} color={COLORS.textLight} />
+        <TextInput accessibilityLabel="Buscar productos" placeholder="Buscar producto o categoría…" placeholderTextColor={COLORS.textLight}
+          value={busqueda} onChangeText={setBusqueda} style={{ flex: 1, fontSize: 15, color: COLORS.text }} />
+        {!!busqueda && <TouchableOpacity accessibilityLabel="Limpiar búsqueda" onPress={() => setBusqueda('')}><Ionicons name="close-circle" size={20} color={COLORS.textLight} /></TouchableOpacity>}
+      </View>
       <FlatList
-        data={productos}
+        data={filtrados}
         keyExtractor={p => String(p.id)}
         renderItem={renderProducto}
         contentContainerStyle={styles.lista}
@@ -358,17 +377,17 @@ export default function ProductosAdminScreen() {
         refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargar} colors={[COLORS.primary]} />}
         ListHeaderComponent={
           productos.length > 0
-            ? <Text style={styles.contador}>{productos.length} productos · toca PEPS para gestionar stock</Text>
+            ? <Text style={styles.contador}>{filtrados.length} de {productos.length} productos · toca PEPS para gestionar stock</Text>
             : null
         }
         ListEmptyComponent={
           !cargando ? (
             <View style={styles.vacio}>
               <Ionicons name="cube-outline" size={48} color={COLORS.border} />
-              <Text style={styles.vacioTexto}>No hay productos</Text>
-              <TouchableOpacity style={styles.btnCrearVacio} onPress={abrirCrear}>
+              <Text style={styles.vacioTexto}>{busqueda ? 'No se encontraron productos' : 'No hay productos'}</Text>
+              {!busqueda && <TouchableOpacity style={styles.btnCrearVacio} onPress={abrirCrear}>
                 <Text style={styles.btnCrearVacioTexto}>Crear primer producto</Text>
-              </TouchableOpacity>
+              </TouchableOpacity>}
             </View>
           ) : null
         }
@@ -519,9 +538,14 @@ export default function ProductosAdminScreen() {
                     keyboardType="decimal-pad" />
                 </Campo>
                 <Campo label="Fecha de entrada">
-                  <TextInput style={styles.input} value={formLote.fecha}
-                    onChangeText={v => setFormLote(p => ({ ...p, fecha: v }))}
-                    placeholder="2026-09-12" placeholderTextColor={COLORS.textLight} />
+                  {Platform.OS === 'web'
+                    ? <input type="date" aria-label="Fecha de entrada" value={formLote.fecha} onChange={e => setFormLote(p => ({ ...p, fecha: e.target.value }))} style={{ padding: 12, border: '1px solid #CBD5E1', borderRadius: 10, fontSize: 15, width: '100%', boxSizing: 'border-box' }} />
+                    : <TextInput style={styles.input} value={formLote.fecha} onChangeText={v => setFormLote(p => ({ ...p, fecha: v }))} placeholder="AAAA-MM-DD" />}
+
+                </Campo>
+                <Campo label="Proveedor">
+                  <Select value={formLote.proveedor} onChange={v => setFormLote(p => ({ ...p, proveedor: v }))}
+                    options={[{label:'Sin proveedor',value:''}, ...proveedores.map(p => ({label:p.nombre,value:String(p.id)}))]} />
                 </Campo>
                 <Campo label="Notas">
                   <TextInput style={styles.input} value={formLote.notas}

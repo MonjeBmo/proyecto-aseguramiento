@@ -19,10 +19,16 @@ export default function LoginScreen() {
   const [cargando, setCargando] = useState(false);
   const [error, setError]       = useState<string | null>(null);
 
+  const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
   const handleLogin = async () => {
     const emailLower = email.trim().toLowerCase();
     if (!emailLower || !password) {
       setError('Email y contraseña son obligatorios.');
+      return;
+    }
+    if (!RE_EMAIL.test(emailLower)) {
+      setError('El correo electrónico no tiene un formato válido.');
       return;
     }
     setCargando(true);

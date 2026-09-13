@@ -5,7 +5,7 @@ export interface Usuario {
   id: number;
   nombre: string;
   email: string;
-  rol: 'vendedor' | 'supervisor' | 'repartidor';
+  rol: 'vendedor' | 'supervisor' | 'repartidor' | 'admin';
 }
 
 export interface Cliente {
@@ -35,6 +35,7 @@ export interface EntregaItem {
 }
 
 export interface Entrega {
+  fecha_entrega?: string | null;
   id: number;
   estado: 'confirmado' | 'despachado' | 'entregado' | 'cancelado';
   total: number;

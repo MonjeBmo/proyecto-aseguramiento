@@ -1,3 +1,4 @@
+import { cabeceraSesion } from './sesion';
 const API_URL = 'http://localhost:3000';
 const TIMEOUT_MS = 8000;
 
@@ -14,7 +15,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise
 async function apiCall<T>(url: string, options: RequestInit = {}): Promise<T> {
   const res = await fetchWithTimeout(url, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...cabeceraSesion(), ...(options.headers || {}) },
   });
   if (res.status === 204) return null as T;
   const data = await res.json();
@@ -76,7 +77,7 @@ export interface UsuarioAdmin {
   id: number;
   nombre: string;
   email: string;
-  rol: 'vendedor' | 'supervisor' | 'repartidor';
+  rol: 'vendedor' | 'supervisor' | 'repartidor' | 'admin';
   creado_en?: string;
 }
 
@@ -87,11 +88,16 @@ export const usuariosAdmin = {
     apiCall(`${API_URL}/api/usuarios`, { method: 'POST', body: JSON.stringify(data) }),
   actualizar: (id: number, data: { nombre: string; rol: string }): Promise<UsuarioAdmin> =>
     apiCall(`${API_URL}/api/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  resetearContrasena: (id: number, nueva_contrasena: string): Promise<UsuarioAdmin & { mensaje: string }> =>
+    apiCall(`${API_URL}/api/usuarios/${id}/reset-password`, { method: 'PATCH', body: JSON.stringify({ nueva_contrasena }) }),
 };
 
 // ── Pedidos ───────────────────────────────────────────────────────────────────
 
 export interface PedidoAdmin {
+  fecha_entrega?: string | null;
+  repartidor_id?: number | null;
+  repartidor_nombre?: string | null;
   id: number;
   estado: string;
   total: number;
@@ -111,15 +117,23 @@ export interface PedidoDetalle extends PedidoAdmin {
 }
 
 export const pedidosAdmin = {
-  listar: (): Promise<PedidoAdmin[]> =>
-    apiCall(`${API_URL}/api/pedidos`),
-  obtener: (id: number): Promise<PedidoDetalle> =>
-    apiCall(`${API_URL}/api/pedidos/${id}`),
+  reprogramar: (id: number, repartidor_id: number, fecha_entrega: string): Promise<PedidoDetalle> =>
+    apiCall(`${API_URL}/api/pedidos/${id}/reprogramar`, { method: 'PATCH', body: JSON.stringify({ repartidor_id, fecha_entrega }) }),
+  programar: (id: number, fecha_entrega: string, repartidor_id?: number | null): Promise<PedidoDetalle> =>
+    apiCall(`${API_URL}/api/pedidos/${id}/programar`, { method: 'PATCH', body: JSON.stringify({ fecha_entrega, ...(repartidor_id ? { repartidor_id } : {}) }) }),
+  asignar: (id: number, repartidor_id: number): Promise<PedidoDetalle> =>
+    apiCall(`${API_URL}/api/pedidos/${id}/repartidor`, { method: 'PATCH', body: JSON.stringify({ repartidor_id }) }),
+  listar: (vendedorId?: number): Promise<PedidoAdmin[]> =>
+    apiCall(`${API_URL}/api/pedidos${vendedorId ? `?vendedor_id=${vendedorId}` : ""}`),
+  obtener: (id: number, vendedorId?: number): Promise<PedidoDetalle> =>
+    apiCall(`${API_URL}/api/pedidos/${id}${vendedorId ? `?vendedor_id=${vendedorId}` : ""}`),
 };
 
 // ── Lotes PEPS ────────────────────────────────────────────────────────────────
 
 export interface Lote {
+  proveedor_id?: number | null;
+  proveedor_nombre?: string | null;
   id: number;
   producto_id: number;
   producto_nombre: string;
@@ -140,6 +154,7 @@ export const lotesAdmin = {
     cantidad: number;
     costo_unitario?: number | null;
     fecha_entrada?: string;
+    proveedor_id?: number;
     notas?: string;
   }): Promise<Lote> =>
     apiCall(`${API_URL}/api/lotes`, { method: 'POST', body: JSON.stringify(data) }),
@@ -163,4 +178,46 @@ export interface Notificacion {
 export const notificacionesAdmin = {
   listar: (): Promise<Notificacion[]> =>
     apiCall(`${API_URL}/api/entregas/notificaciones`),
+};
+
+
+// ── Bitácora ──────────────────────────────────────────────────────────────────
+
+export interface BitacoraEntry {
+  id: number;
+  timestamp: string;
+  metodo: string;
+  ruta: string;
+  usuario_id: number | null;
+  usuario_nombre: string | null;
+  usuario_rol: string | null;
+  estado: number;
+  duracion_ms: number;
+  ip: string | null;
+}
+
+export const bitacoraAdmin = {
+  listar: (params?: { fecha?: string; metodo?: string; ruta?: string }): Promise<BitacoraEntry[]> => {
+    const qs = new URLSearchParams();
+    if (params?.fecha) qs.set('fecha', params.fecha);
+    if (params?.metodo) qs.set('metodo', params.metodo);
+    if (params?.ruta) qs.set('ruta', params.ruta);
+    const q = qs.toString();
+    return apiCall(`${API_URL}/api/bitacora${q ? `?${q}` : ''}`);
+  },
+};
+
+export interface Proveedor {
+  id: number;
+  nombre: string;
+  nit: string;
+  telefono: string;
+  email: string;
+  direccion: string;
+}
+export const proveedoresAdmin = {
+  listar: (): Promise<Proveedor[]> => apiCall(`${API_URL}/api/proveedores`),
+  crear: (data: Omit<Proveedor, 'id'>): Promise<Proveedor> => apiCall(`${API_URL}/api/proveedores`, { method: 'POST', body: JSON.stringify(data) }),
+  actualizar: (id: number, data: Omit<Proveedor, 'id'>): Promise<Proveedor> => apiCall(`${API_URL}/api/proveedores/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  eliminar: (id: number): Promise<null> => apiCall(`${API_URL}/api/proveedores/${id}`, { method: 'DELETE' }),
 };

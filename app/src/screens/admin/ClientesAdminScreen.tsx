@@ -17,6 +17,7 @@ export default function ClientesAdminScreen() {
   const navigation = useNavigation();
   const { setUsuario } = useApp();
   const [clientes, setClientes] = useState<ClienteAdmin[]>([]);
+  const [busqueda, setBusqueda] = useState('');
   const [cargando, setCargando] = useState(true);
   const [error, setError]       = useState<string | null>(null);
 
@@ -25,7 +26,7 @@ export default function ClientesAdminScreen() {
   const [form, setForm]           = useState(FORM_VACIO);
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [exito, setExito]         = useState(false);
+  const [exito, setExito]         = useState('');
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -60,9 +61,23 @@ export default function ClientesAdminScreen() {
     setModalVisible(true);
   };
 
+  const RE_TELEFONO_GT = /^(\+502[\s-]?)?[2-9]\d{3}[-\s]?\d{4}$/;
+
   const guardar = async () => {
-    if (!form.nombre.trim()) {
-      setFormError('El nombre del cliente es obligatorio.');
+    if (!form.nombre.trim() || form.nombre.trim().length < 2) {
+      setFormError('El nombre del cliente es obligatorio (mín. 2 caracteres).');
+      return;
+    }
+    if (form.telefono.trim() && !RE_TELEFONO_GT.test(form.telefono.trim())) {
+      setFormError('El teléfono debe ser un número guatemalteco válido (ej. 5555-1234).');
+      return;
+    }
+    const lat = form.lat.trim() === '' ? null : Number(form.lat);
+    const lng = form.lng.trim() === '' ? null : Number(form.lng);
+    if ((lat === null) !== (lng === null) ||
+        (lat !== null && (!Number.isFinite(lat) || Math.abs(lat) > 90)) ||
+        (lng !== null && (!Number.isFinite(lng) || Math.abs(lng) > 180))) {
+      setFormError('Selecciona una ubicación válida con latitud y longitud.');
       return;
     }
     setGuardando(true);
@@ -73,8 +88,8 @@ export default function ClientesAdminScreen() {
         telefono: form.telefono,
         direccion: form.direccion,
         zona: form.zona,
-        lat: form.lat !== '' ? parseFloat(form.lat) : null,
-        lng: form.lng !== '' ? parseFloat(form.lng) : null,
+        lat,
+        lng,
       };
       if (editando) {
         const actualizado = await clientesAdmin.actualizar(editando.id, payload);
@@ -84,8 +99,8 @@ export default function ClientesAdminScreen() {
         setClientes(prev => [nuevo, ...prev]);
       }
       setModalVisible(false);
-      setExito(true);
-      setTimeout(() => setExito(false), 2500);
+      setExito(lat !== null ? 'Cliente y coordenadas guardados correctamente' : 'Cliente guardado sin ubicación');
+      setTimeout(() => setExito(''), 2500);
     } catch (e: any) {
       setFormError(e.message);
     } finally {
@@ -167,10 +182,10 @@ export default function ClientesAdminScreen() {
         </View>
       </View>
 
-      {exito && (
+      {!!exito && (
         <View style={styles.exitoBanner}>
           <Ionicons name="checkmark-circle" size={16} color="#10B981" />
-          <Text style={styles.exitoTexto}>Guardado correctamente</Text>
+          <Text style={styles.exitoTexto}>{exito}</Text>
         </View>
       )}
 
@@ -180,26 +195,55 @@ export default function ClientesAdminScreen() {
         </View>
       )}
 
+      {/* Buscador */}
+      <View style={styles.buscadorRow}>
+        <Ionicons name="search-outline" size={16} color={COLORS.textLight} style={styles.buscadorIcono} />
+        <TextInput
+          style={styles.buscadorInput}
+          placeholder="Buscar por nombre o teléfono…"
+          placeholderTextColor={COLORS.textLight}
+          value={busqueda}
+          onChangeText={setBusqueda}
+        />
+        {!!busqueda && (
+          <TouchableOpacity onPress={() => setBusqueda('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={16} color={COLORS.textLight} />
+          </TouchableOpacity>
+        )}
+      </View>
+
       <FlatList
-        data={clientes}
+        data={clientes.filter(c => {
+          if (!busqueda.trim()) return true;
+          const q = busqueda.toLowerCase();
+          return c.nombre.toLowerCase().includes(q) || c.telefono.includes(q);
+        })}
         keyExtractor={c => String(c.id)}
         renderItem={renderItem}
         contentContainerStyle={styles.lista}
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargar} colors={[COLORS.primary]} />}
         ListHeaderComponent={
-          clientes.length > 0
-            ? <Text style={styles.contador}>{clientes.length} clientes registrados</Text>
-            : null
+          clientes.length > 0 ? (
+            <Text style={styles.contador}>
+              {busqueda.trim()
+                ? `${clientes.filter(c => { const q = busqueda.toLowerCase(); return c.nombre.toLowerCase().includes(q) || c.telefono.includes(q); }).length} de ${clientes.length} clientes`
+                : `${clientes.length} clientes registrados`}
+            </Text>
+          ) : null
         }
         ListEmptyComponent={
           !cargando ? (
             <View style={styles.vacio}>
               <Ionicons name="storefront-outline" size={48} color={COLORS.border} />
-              <Text style={styles.vacioTexto}>No hay clientes registrados</Text>
-              <TouchableOpacity style={styles.btnCrearVacio} onPress={abrirCrear}>
-                <Text style={styles.btnCrearVacioTexto}>Agregar primer cliente</Text>
-              </TouchableOpacity>
+              <Text style={styles.vacioTexto}>
+                {busqueda.trim() ? 'Sin resultados para esa búsqueda' : 'No hay clientes registrados'}
+              </Text>
+              {!busqueda && (
+                <TouchableOpacity style={styles.btnCrearVacio} onPress={abrirCrear}>
+                  <Text style={styles.btnCrearVacioTexto}>Agregar primer cliente</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : null
         }
@@ -293,6 +337,14 @@ const styles = StyleSheet.create({
   },
   errorBanner: { backgroundColor: COLORS.error + '18', padding: 12, margin: 12, borderRadius: 8 },
   errorTexto: { color: COLORS.error, fontSize: 13 },
+  buscadorRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    paddingHorizontal: 12, paddingVertical: 8,
+  },
+  buscadorIcono: { marginRight: 8 },
+  buscadorInput: { flex: 1, fontSize: 14, color: COLORS.text, paddingVertical: 6 },
   lista: { padding: 12, paddingBottom: 40 },
   contador: { fontSize: 12, color: COLORS.textLight, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10 },
   row: {

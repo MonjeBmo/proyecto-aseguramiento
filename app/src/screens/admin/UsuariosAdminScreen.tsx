@@ -15,18 +15,20 @@ const ROL_COLOR: Record<string, string> = {
   vendedor:   COLORS.primary,
   supervisor: '#DC2626',
   repartidor: COLORS.accent,
+  admin:      '#7C3AED',
 };
 const ROL_ICONO: Record<string, any> = {
   vendedor:   'briefcase-outline',
   supervisor: 'shield-checkmark-outline',
   repartidor: 'bicycle-outline',
+  admin:      'settings-outline',
 };
 
 const FORM_VACIO = { nombre: '', email: '', rol: 'vendedor' as const };
 
 export default function UsuariosAdminScreen() {
   const navigation = useNavigation();
-  const { setUsuario } = useApp();
+  const { usuario: adminActual, setUsuario, setAdminOrigen } = useApp();
   const [usuarios, setUsuarios]   = useState<UsuarioAdmin[]>([]);
   const [cargando, setCargando]   = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -37,6 +39,12 @@ export default function UsuariosAdminScreen() {
   const [guardando, setGuardando] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [exito, setExito]         = useState(false);
+
+  // Reset contraseña
+  const [resetTarget, setResetTarget]   = useState<UsuarioAdmin | null>(null);
+  const [nuevaPass, setNuevaPass]       = useState('1234');
+  const [resetando, setResetando]       = useState(false);
+  const [resetError, setResetError]     = useState<string | null>(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -67,9 +75,19 @@ export default function UsuariosAdminScreen() {
     setModalVisible(true);
   };
 
+  const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
   const guardar = async () => {
     if (!form.nombre.trim() || (!editando && !form.email.trim())) {
       setFormError(editando ? 'El nombre es obligatorio.' : 'Nombre y email son obligatorios.');
+      return;
+    }
+    if (form.nombre.trim().length < 2) {
+      setFormError('El nombre debe tener al menos 2 caracteres.');
+      return;
+    }
+    if (!editando && !RE_EMAIL.test(form.email.trim())) {
+      setFormError('El correo electrónico no tiene un formato válido.');
       return;
     }
     setGuardando(true);
@@ -92,6 +110,38 @@ export default function UsuariosAdminScreen() {
     }
   };
 
+  const ingresarComo = (u: UsuarioAdmin) => {
+    if (!adminActual) return;
+    setAdminOrigen(adminActual);
+    setUsuario({ id: u.id, nombre: u.nombre, email: u.email, rol: u.rol });
+  };
+
+  const abrirReset = (u: UsuarioAdmin) => {
+    setResetTarget(u);
+    setNuevaPass('1234');
+    setResetError(null);
+  };
+
+  const confirmarReset = async () => {
+    if (!resetTarget) return;
+    if (nuevaPass.trim().length < 4) {
+      setResetError('La contraseña debe tener al menos 4 caracteres.');
+      return;
+    }
+    setResetando(true);
+    setResetError(null);
+    try {
+      await usuariosAdmin.resetearContrasena(resetTarget.id, nuevaPass.trim());
+      setResetTarget(null);
+      setExito(true);
+      setTimeout(() => setExito(false), 2500);
+    } catch (e: any) {
+      setResetError(e.message);
+    } finally {
+      setResetando(false);
+    }
+  };
+
   const renderItem = ({ item }: { item: UsuarioAdmin }) => {
     const color = ROL_COLOR[item.rol] ?? COLORS.textLight;
     const icono = ROL_ICONO[item.rol] ?? 'person-outline';
@@ -107,6 +157,14 @@ export default function UsuariosAdminScreen() {
             <Text style={[styles.rolTexto, { color }]}>{item.rol}</Text>
           </View>
         </View>
+        {adminActual?.rol === 'admin' && (
+          <TouchableOpacity style={[styles.btnAccion, styles.btnIngresar]} onPress={() => ingresarComo(item)}>
+            <Ionicons name="log-in-outline" size={18} color="#7C3AED" />
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.btnAccion} onPress={() => abrirReset(item)}>
+          <Ionicons name="key-outline" size={18} color={COLORS.warning} />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.btnAccion} onPress={() => abrirEditar(item)}>
           <Ionicons name="pencil-outline" size={18} color={COLORS.primary} />
         </TouchableOpacity>
@@ -152,6 +210,51 @@ export default function UsuariosAdminScreen() {
             : null
         }
       />
+
+      {/* Modal reset contraseña */}
+      <Modal visible={resetTarget !== null} transparent animationType="fade" onRequestClose={() => { if (!resetando) setResetTarget(null); }}>
+        <View style={styles.overlay}>
+          <View style={styles.resetCard}>
+            <View style={styles.resetHead}>
+              <Ionicons name="key-outline" size={20} color={COLORS.warning} />
+              <Text style={styles.resetTitulo}>Resetear contraseña</Text>
+            </View>
+            <Text style={styles.resetSub}>
+              Usuario: <Text style={{ fontWeight: '700', color: COLORS.text }}>{resetTarget?.nombre}</Text>
+            </Text>
+            <Text style={styles.campoLabel}>Nueva contraseña</Text>
+            <TextInput
+              style={styles.campoInput}
+              value={nuevaPass}
+              onChangeText={setNuevaPass}
+              placeholder="Min. 4 caracteres"
+              placeholderTextColor={COLORS.textLight}
+              autoCapitalize="none"
+              secureTextEntry={false}
+            />
+            {resetError && (
+              <View style={styles.formError}>
+                <Text style={styles.formErrorTexto}>{resetError}</Text>
+              </View>
+            )}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.btnCancelar} onPress={() => setResetTarget(null)} disabled={resetando}>
+                <Text style={styles.btnCancelarTexto}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btnReset, resetando && { opacity: 0.6 }]}
+                onPress={confirmarReset}
+                disabled={resetando}
+              >
+                {resetando
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={styles.btnGuardarTexto}>Guardar contraseña</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
@@ -277,6 +380,7 @@ const styles = StyleSheet.create({
   rolBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
   rolTexto: { fontSize: 11, fontWeight: '700' },
   btnAccion: { padding: 8, borderRadius: 8, backgroundColor: COLORS.background },
+  btnIngresar: { backgroundColor: '#7C3AED' + '15' },
   modal: { flex: 1, backgroundColor: COLORS.background },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -318,4 +422,21 @@ const styles = StyleSheet.create({
     flex: 2, backgroundColor: '#DC2626', borderRadius: 10, paddingVertical: 14, alignItems: 'center',
   },
   btnGuardarTexto: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  resetCard: {
+    backgroundColor: COLORS.surface, borderRadius: 16, padding: 24,
+    width: '100%', maxWidth: 400,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18, shadowRadius: 16, elevation: 10,
+  },
+  resetHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  resetTitulo: { fontSize: 17, fontWeight: '800', color: COLORS.text },
+  resetSub: { fontSize: 13, color: COLORS.textLight, marginBottom: 16 },
+  btnReset: {
+    flex: 2, backgroundColor: COLORS.warning, borderRadius: 10, paddingVertical: 14, alignItems: 'center',
+  },
 });

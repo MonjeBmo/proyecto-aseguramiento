@@ -37,12 +37,16 @@ export default function AdminDashboardScreen() {
     });
   }, []);
 
+  const esAdmin = usuario?.rol === 'admin';
+
   const modulos = [
+    { titulo: 'Proveedores', sub: 'Gestión de proveedores', icono: 'business-outline' as const, color: '#059669', ruta: 'ProveedoresAdmin' as const },
     { titulo: 'Productos',      sub: `${stats.productos} registros`,      icono: 'cube-outline' as const,            color: COLORS.primary, ruta: 'ProductosAdmin' as const },
     { titulo: 'Clientes',       sub: `${stats.clientes} registros`,       icono: 'storefront-outline' as const,      color: '#7C3AED', ruta: 'ClientesAdmin' as const },
     { titulo: 'Pedidos',        sub: `${stats.pedidos} pedidos`,          icono: 'receipt-outline' as const,         color: COLORS.accent, ruta: 'PedidosAdmin' as const },
     { titulo: 'Notificaciones', sub: `${stats.notificaciones} enviadas`,  icono: 'chatbubbles-outline' as const,     color: '#059669', ruta: 'Notificaciones' as const },
     { titulo: 'Usuarios',       sub: 'Gestión de equipo',                 icono: 'people-outline' as const,          color: '#DC2626', ruta: 'UsuariosAdmin' as const },
+    ...(esAdmin ? [{ titulo: 'Bitácora', sub: 'Auditoría de peticiones', icono: 'document-text-outline' as const, color: '#7C3AED', ruta: 'BitacoraAdmin' as const }] : []),
   ];
 
   return (
@@ -52,7 +56,7 @@ export default function AdminDashboardScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.bienvenida}>Panel de Supervisión</Text>
+          <Text style={styles.bienvenida}>{esAdmin ? 'Panel de Administración' : 'Panel de Supervisión'}</Text>
           <Text style={styles.nombre}>{usuario?.nombre}</Text>
         </View>
         <TouchableOpacity style={styles.btnSalir} onPress={() => setUsuario(null)}>
