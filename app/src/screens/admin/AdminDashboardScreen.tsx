@@ -18,7 +18,7 @@ type Stats = { productos: number; clientes: number; pedidos: number; notificacio
 
 export default function AdminDashboardScreen() {
   const navigation = useNavigation<NavProp>();
-  const { usuario, setUsuario } = useApp();
+  const { usuario, setUsuario, adminOrigen } = useApp();
   const [stats, setStats] = useState<Stats>({ productos: 0, clientes: 0, pedidos: 0, notificaciones: 0 });
 
   useEffect(() => {
@@ -59,9 +59,11 @@ export default function AdminDashboardScreen() {
           <Text style={styles.bienvenida}>{esAdmin ? 'Panel de Administración' : 'Panel de Supervisión'}</Text>
           <Text style={styles.nombre}>{usuario?.nombre}</Text>
         </View>
-        <TouchableOpacity style={styles.btnSalir} onPress={() => setUsuario(null)}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
-        </TouchableOpacity>
+        {adminOrigen === null && (
+          <TouchableOpacity style={styles.btnSalir} onPress={() => setUsuario(null)}>
+            <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.contenido}>

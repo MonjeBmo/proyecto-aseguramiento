@@ -12,7 +12,7 @@ import { useApp } from '../../context/AppContext';
 
 export default function NotificacionesScreen() {
   const navigation = useNavigation();
-  const { setUsuario } = useApp();
+  const { setUsuario, adminOrigen } = useApp();
   const [numero, setNumero] = useState('');
   const [fecha, setFecha] = useState('');
   const [notifs, setNotifs]     = useState<Notificacion[]>([]);
@@ -77,9 +77,11 @@ export default function NotificacionesScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.titulo}>Notificaciones WhatsApp</Text>
-        <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
-        </TouchableOpacity>
+        {adminOrigen === null && (
+          <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
+            <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {error && <View style={styles.errorBanner}><Text style={styles.errorTexto}>{error}</Text></View>}

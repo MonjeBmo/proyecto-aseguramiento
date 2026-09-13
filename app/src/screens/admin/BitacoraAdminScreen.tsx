@@ -38,7 +38,7 @@ function formatFecha(iso: string): string {
 
 export default function BitacoraAdminScreen() {
   const navigation = useNavigation();
-  const { setUsuario } = useApp();
+  const { setUsuario, adminOrigen } = useApp();
 
   const [entradas, setEntradas] = useState<BitacoraEntry[]>([]);
   const [cargando, setCargando] = useState(true);
@@ -106,9 +106,11 @@ export default function BitacoraAdminScreen() {
           <Text style={styles.titulo}>Bitácora</Text>
           <Text style={styles.subtitulo}>Auditoría de peticiones API</Text>
         </View>
-        <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
-        </TouchableOpacity>
+        {adminOrigen === null && (
+          <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
+            <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Filtros */}

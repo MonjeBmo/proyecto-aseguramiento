@@ -43,7 +43,7 @@ const FORM_VACIO = {
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function ProductosAdminScreen() {
   const navigation = useNavigation();
-  const { setUsuario } = useApp();
+  const { setUsuario, adminOrigen } = useApp();
 
   // Lista de productos
   const [busqueda, setBusqueda] = useState('');
@@ -344,9 +344,11 @@ export default function ProductosAdminScreen() {
         </TouchableOpacity>
         <Text style={styles.titulo}>Productos</Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
-            <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
-          </TouchableOpacity>
+          {adminOrigen === null && (
+            <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
+              <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.btnAdd} onPress={abrirCrear}>
             <Ionicons name="add" size={24} color="#fff" />
           </TouchableOpacity>

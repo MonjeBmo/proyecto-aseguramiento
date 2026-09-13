@@ -28,7 +28,7 @@ const FORM_VACIO = { nombre: '', email: '', rol: 'vendedor' as const };
 
 export default function UsuariosAdminScreen() {
   const navigation = useNavigation();
-  const { usuario: adminActual, setUsuario, setAdminOrigen } = useApp();
+  const { usuario: adminActual, setUsuario, setAdminOrigen, adminOrigen } = useApp();
   const [usuarios, setUsuarios]   = useState<UsuarioAdmin[]>([]);
   const [cargando, setCargando]   = useState(true);
   const [error, setError]         = useState<string | null>(null);
@@ -180,9 +180,11 @@ export default function UsuariosAdminScreen() {
         </TouchableOpacity>
         <Text style={styles.titulo}>Usuarios</Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
-            <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
-          </TouchableOpacity>
+          {adminOrigen === null && (
+            <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
+              <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.btnAdd} onPress={abrirCrear}>
             <Ionicons name="add" size={24} color="#fff" />
           </TouchableOpacity>

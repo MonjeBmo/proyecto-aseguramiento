@@ -15,7 +15,7 @@ const FORM_VACIO = { nombre: '', telefono: '', direccion: '', zona: '', lat: '',
 
 export default function ClientesAdminScreen() {
   const navigation = useNavigation();
-  const { setUsuario } = useApp();
+  const { setUsuario, adminOrigen } = useApp();
   const [clientes, setClientes] = useState<ClienteAdmin[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [cargando, setCargando] = useState(true);
@@ -173,9 +173,11 @@ export default function ClientesAdminScreen() {
         </TouchableOpacity>
         <Text style={styles.titulo}>Clientes</Text>
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
-            <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
-          </TouchableOpacity>
+          {adminOrigen === null && (
+            <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
+              <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.btnAdd} onPress={abrirCrear}>
             <Ionicons name="add" size={24} color="#fff" />
           </TouchableOpacity>

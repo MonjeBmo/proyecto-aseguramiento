@@ -22,7 +22,7 @@ const ESTADO_CONFIG: Record<string, { label: string; color: string; icono: any }
 
 export default function PedidosAdminScreen() {
   const navigation = useNavigation();
-  const { usuario, setUsuario, actualizarEntregas } = useApp();
+  const { usuario, setUsuario, actualizarEntregas, adminOrigen } = useApp();
   const esSupervisor = usuario?.rol === 'supervisor';
   const [repartidores, setRepartidores] = useState<UsuarioAdmin[]>([]);
   const [seleccionado, setSeleccionado] = useState<number | null>(null);
@@ -159,9 +159,11 @@ export default function PedidosAdminScreen() {
           <Ionicons name="arrow-back" size={22} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.titulo}>{esVendedor ? 'Mis pedidos' : 'Pedidos'}</Text>
-        <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
-        </TouchableOpacity>
+        {adminOrigen === null && (
+          <TouchableOpacity style={styles.btnLogout} onPress={() => setUsuario(null)}>
+            <Ionicons name="log-out-outline" size={20} color={COLORS.textLight} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Panel de búsqueda y fecha — visible para todos los roles */}
