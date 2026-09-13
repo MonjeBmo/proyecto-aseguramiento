@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   SafeAreaView, RefreshControl, StatusBar,
@@ -9,8 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useApp } from '../context/AppContext';
-import { Entrega, MOCK_ENTREGAS } from '../data/mockData';
-import { obtenerMisEntregas } from '../services/entregasApiService';
+import { Entrega } from '../data/mockData';
+import { useEntregas } from '../hooks/useEntregas';
+import FiltroFechaEntregas from '../components/FiltroFechaEntregas';
 import OfflineBanner from '../components/OfflineBanner';
 import { COLORS } from '../constants/colors';
 
@@ -30,37 +31,10 @@ const ESTADO_CONFIG = {
  */
 export default function RutaDiariaScreen() {
   const navigation = useNavigation<NavProp>();
-  const { usuario, isOnline, setUsuario } = useApp();
+  const { usuario, setUsuario } = useApp();
 
-  const [entregas, setEntregas] = useState<Entrega[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const { entregas, cargando, error, cargarEntregas } = useEntregas();
   const pendientes = entregas.filter(e => e.estado === 'confirmado' || e.estado === 'despachado').length;
-
-  const cargarEntregas = useCallback(async () => {
-    if (!usuario) return;
-    setCargando(true);
-    setError(null);
-    try {
-      if (isOnline) {
-        const data = await obtenerMisEntregas(usuario.id);
-        setEntregas(data);
-      } else {
-        setEntregas(MOCK_ENTREGAS);
-      }
-    } catch {
-      // Si la API falla, usar datos mock como fallback
-      setEntregas(MOCK_ENTREGAS);
-      setError('No se pudo conectar al servidor. Mostrando datos locales.');
-    } finally {
-      setCargando(false);
-    }
-  }, [usuario, isOnline]);
-
-  useEffect(() => {
-    cargarEntregas();
-  }, [cargarEntregas]);
 
   const renderEntrega = ({ item }: { item: Entrega }) => {
     const config = ESTADO_CONFIG[item.estado];
@@ -127,8 +101,7 @@ export default function RutaDiariaScreen() {
         </View>
         <TouchableOpacity
           style={styles.btnMapa}
-          onPress={() => navigation.navigate('MapaRuta', { entregas })}
-          disabled={entregas.length === 0}
+          onPress={() => navigation.navigate('MapaRuta')}
         >
           <Ionicons name="map-outline" size={18} color={COLORS.primary} />
           <Text style={styles.btnMapaTexto}>Mapa</Text>
@@ -138,6 +111,8 @@ export default function RutaDiariaScreen() {
           <Text style={styles.contadorLabel}>pendientes</Text>
         </View>
       </View>
+
+      <FiltroFechaEntregas />
 
       {/* Banner de error no bloqueante */}
       {error && (
@@ -166,15 +141,15 @@ export default function RutaDiariaScreen() {
           !cargando ? (
             <View style={styles.vacio}>
               <Ionicons name="checkmark-done-circle-outline" size={56} color={COLORS.border} />
-              <Text style={styles.vacioTitulo}>Todo entregado</Text>
-              <Text style={styles.vacioSub}>No tienes entregas pendientes para hoy.</Text>
+              <Text style={styles.vacioTitulo}>{error ? 'Entregas no disponibles' : 'Sin pedidos para esta fecha'}</Text>
+              <Text style={styles.vacioSub}>Selecciona otra fecha o desliza para actualizar.</Text>
             </View>
           ) : null
         }
         ListHeaderComponent={
           entregas.length > 0 ? (
             <Text style={styles.seccionLabel}>
-              {pendientes > 0 ? `${pendientes} entrega(s) por completar` : 'Todas las entregas completadas'}
+              {pendientes > 0 ? `${pendientes} entrega(s) por completar` : 'Sin entregas pendientes'}
             </Text>
           ) : null
         }

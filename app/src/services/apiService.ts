@@ -1,3 +1,4 @@
+import { guardarToken } from './sesion';
 import { Usuario } from '../data/mockData';
 
 // Ajusta esta URL con la IP de tu maquina al usar Expo en dispositivo fisico
@@ -36,7 +37,9 @@ export async function loginApi(
     throw new Error(data.error || 'Error de autenticacion');
   }
 
-  return res.json();
+  const data = await res.json();
+  guardarToken(data.token);
+  return data;
 }
 
 // ── Productos ─────────────────────────────────────────────────────────────────

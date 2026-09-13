@@ -10,6 +10,8 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { Entrega } from '../data/mockData';
+import { useEntregas } from '../hooks/useEntregas';
+import FiltroFechaEntregas from '../components/FiltroFechaEntregas';
 import { COLORS } from '../constants/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MapaRuta'>;
@@ -23,7 +25,7 @@ const ESTADO_CONFIG = {
 
 export default function MapaRutaScreen({ route }: Props) {
   const navigation = useNavigation();
-  const { entregas } = route.params;
+  const { entregas, cargando, error, cargarEntregas } = useEntregas();
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -35,6 +37,8 @@ export default function MapaRutaScreen({ route }: Props) {
         <View style={{ width: 38 }} />
       </View>
 
+      <FiltroFechaEntregas />
+      {error && <Text style={{ color: COLORS.error, padding: 12 }}>{error}</Text>}
       <View style={styles.notaBanner}>
         <Ionicons name="map-outline" size={16} color={COLORS.primary} />
         <Text style={styles.notaTexto}>El mapa interactivo solo esta disponible en la version web.</Text>
@@ -42,6 +46,9 @@ export default function MapaRutaScreen({ route }: Props) {
 
       <FlatList
         data={entregas}
+        refreshing={cargando}
+        onRefresh={cargarEntregas}
+        ListEmptyComponent={<Text>Sin pedidos para esta fecha.</Text>}
         keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.lista}
         renderItem={({ item, index }) => {

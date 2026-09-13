@@ -17,23 +17,9 @@ const ZONA_COORDS: Record<string, [number, number]> = {
 };
 const DEFAULT: [number, number] = [14.6300, -90.5200];
 
-function cargarLeaflet(cb: () => void) {
-  if (!document.getElementById('leaflet-css')) {
-    const l = document.createElement('link');
-    l.id = 'leaflet-css'; l.rel = 'stylesheet';
-    l.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(l);
-  }
-  const win = window as any;
-  if (win.L) { cb(); return; }
-  if (document.getElementById('leaflet-js')) {
-    document.getElementById('leaflet-js')!.addEventListener('load', cb);
-    return;
-  }
-  const s = document.createElement('script');
-  s.id = 'leaflet-js'; s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-  s.onload = cb; document.head.appendChild(s);
-}
+// Leaflet se incluye en el bundle: no depende de cargar scripts de un CDN.
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface Props {
   lat: string;
@@ -44,10 +30,25 @@ interface Props {
 }
 
 export default function LocationPicker({ lat, lng, zona, onChangeLat, onChangeLng }: Props) {
-  const [open, setOpen] = useState(false);
+  // Mostrar el selector también cuando el cliente todavía no tiene ubicación.
+  const [open, setOpen] = useState(true);
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef    = useRef<any>(null);
   const markerRef = useRef<any>(null);
+
+  // Refs para leer siempre los valores actuales dentro de setTimeout/callbacks
+  // (evita problemas de closure stale con [open] como unica dependencia)
+  const latRef  = useRef(lat);
+  const lngRef  = useRef(lng);
+  const zonaRef = useRef(zona);
+  const onChangeLatRef = useRef(onChangeLat);
+  const onChangeLngRef = useRef(onChangeLng);
+
+  useEffect(() => { latRef.current = lat; }, [lat]);
+  useEffect(() => { lngRef.current = lng; }, [lng]);
+  useEffect(() => { zonaRef.current = zona; }, [zona]);
+  useEffect(() => { onChangeLatRef.current = onChangeLat; }, [onChangeLat]);
+  useEffect(() => { onChangeLngRef.current = onChangeLng; }, [onChangeLng]);
 
   const hasCoords = lat !== '' && lng !== '';
 
@@ -58,12 +59,16 @@ export default function LocationPicker({ lat, lng, zona, onChangeLat, onChangeLn
       return;
     }
     const timer = setTimeout(() => {
-      cargarLeaflet(() => {
-        const L = (window as any).L;
+      {
         if (!L || !mapDivRef.current || mapRef.current) return;
 
-        const initLat = lat !== '' ? parseFloat(lat) : (ZONA_COORDS[zona ?? ''] ?? DEFAULT)[0];
-        const initLng = lng !== '' ? parseFloat(lng) : (ZONA_COORDS[zona ?? ''] ?? DEFAULT)[1];
+        // Leer valores actuales desde refs (no desde closure)
+        const curLat  = latRef.current;
+        const curLng  = lngRef.current;
+        const curZona = zonaRef.current;
+
+        const initLat = curLat !== '' ? parseFloat(curLat) : (ZONA_COORDS[curZona ?? ''] ?? DEFAULT)[0];
+        const initLng = curLng !== '' ? parseFloat(curLng) : (ZONA_COORDS[curZona ?? ''] ?? DEFAULT)[1];
 
         const map = L.map(mapDivRef.current).setView([initLat, initLng], 15);
         mapRef.current = map;
@@ -85,23 +90,25 @@ export default function LocationPicker({ lat, lng, zona, onChangeLat, onChangeLn
         markerRef.current = marker;
 
         function setCoords(ll: any) {
-          onChangeLat(ll.lat.toFixed(6));
-          onChangeLng(ll.lng.toFixed(6));
+          onChangeLatRef.current(ll.lat.toFixed(6));
+          onChangeLngRef.current(ll.lng.toFixed(6));
         }
 
-        // Actualizar coords con lat/lng iniciales
-        if (lat === '') {
-          onChangeLat(initLat.toFixed(6));
-          onChangeLng(initLng.toFixed(6));
-        }
+        // Centrar en la zona no confirma una ubicación: el usuario debe seleccionarla.
 
         map.on('click', (e: any) => { marker.setLatLng(e.latlng); setCoords(e.latlng); });
         marker.on('dragend', () => setCoords(marker.getLatLng()));
-      });
+        map.invalidateSize();
+      }
     }, 180);
 
-    return () => { clearTimeout(timer); };
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    return () => {
+      clearTimeout(timer);
+      mapRef.current?.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+    };
+  }, [open]);
 
   return (
     <View>
@@ -151,7 +158,13 @@ export default function LocationPicker({ lat, lng, zona, onChangeLat, onChangeLn
           )}
           {/* Div nativo para Leaflet */}
           <div ref={mapDivRef} style={{ width: '100%', height: 280 }} />
-          <TouchableOpacity style={styles.btnCerrar} onPress={() => setOpen(false)}>
+          <TouchableOpacity style={styles.btnCerrar} onPress={() => {
+            if (!markerRef.current) return;
+            const point = markerRef.current.getLatLng();
+            onChangeLat(point.lat.toFixed(6));
+            onChangeLng(point.lng.toFixed(6));
+            setOpen(false);
+          }}>
             <Ionicons name="checkmark-circle" size={16} color="#7C3AED" />
             <Text style={styles.btnCerrarTexto}>Listo — usar esta ubicacion</Text>
           </TouchableOpacity>

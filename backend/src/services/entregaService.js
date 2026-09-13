@@ -15,6 +15,7 @@ async function obtenerEntregasPorRepartidor(repartidorId) {
   const { rows: pedidos } = await pool.query(
     `SELECT
        p.id, p.estado, p.total, p.creado_en,
+       to_char(p.fecha_entrega, 'YYYY-MM-DD') AS fecha_entrega,
        c.id       AS cliente_id,
        c.nombre   AS cliente_nombre,
        c.telefono AS cliente_telefono,

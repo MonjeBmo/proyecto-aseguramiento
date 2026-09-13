@@ -1,8 +1,7 @@
-// Version web — Leaflet cargado desde CDN (sin bundling via Metro).
-// Esto evita los errores de compatibilidad con react-leaflet + Metro.
-import React, { useEffect, useRef } from 'react';
+// Mapa web con datos actuales de las entregas.
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions,
+  View, Text, StyleSheet, TouchableOpacity, SafeAreaView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -10,6 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { Entrega } from '../data/mockData';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { calcularRuta, RutaCalculada } from '../services/rutaApiService';
+import { useEntregas } from '../hooks/useEntregas';
+import FiltroFechaEntregas from '../components/FiltroFechaEntregas';
 import { COLORS } from '../constants/colors';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MapaRuta'>;
@@ -52,44 +56,26 @@ const STATUS_LABELS: Record<string, string> = {
 function getCoords(e: Entrega, idx: number): [number, number] {
   // Usa coordenadas reales si el cliente tiene lat/lng asignados
   if (e.cliente_lat != null && e.cliente_lng != null) {
-    return [e.cliente_lat, e.cliente_lng];
+    return [Number(e.cliente_lat), Number(e.cliente_lng)];
   }
   const base = ZONA_COORDS[e.cliente_zona] ?? BODEGA;
   return [base[0] + idx * 0.0009, base[1] + idx * 0.0007];
 }
 
-function cargarLeaflet(cb: () => void) {
-  // Cargar CSS
-  if (!document.getElementById('leaflet-css')) {
-    const link = document.createElement('link');
-    link.id = 'leaflet-css';
-    link.rel = 'stylesheet';
-    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-    document.head.appendChild(link);
-  }
-  // Cargar JS (o reusar si ya esta)
-  const win = window as any;
-  if (win.L) { cb(); return; }
-  if (document.getElementById('leaflet-js')) {
-    document.getElementById('leaflet-js')!.addEventListener('load', cb);
-    return;
-  }
-  const script = document.createElement('script');
-  script.id = 'leaflet-js';
-  script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-  script.onload = cb;
-  document.head.appendChild(script);
-}
-
 export default function MapaRutaScreen({ route }: Props) {
   const navigation = useNavigation();
-  const { entregas } = route.params;
+  const { entregas, cargando, error, cargarEntregas } = useEntregas();
+  const [ruta, setRuta] = useState<RutaCalculada | null>(null);
+  const [calculando, setCalculando] = useState(false);
+  const [errorRuta, setErrorRuta] = useState<string | null>(null);
+  const [reintento, setReintento] = useState(0);
+  const paradas = entregas.map((entrega, indice) => ({ entrega, indice }))
+    .filter(({ entrega }) => entrega.estado === 'confirmado' || entrega.estado === 'despachado')
+    .sort((a, b) => Number(b.entrega.estado === 'despachado') - Number(a.entrega.estado === 'despachado'));
+  const aproximadas = paradas.some(({ entrega }) => entrega.cliente_lat == null || entrega.cliente_lng == null);
   const mapDivRef = useRef<HTMLDivElement>(null);
   const mapRef    = useRef<any>(null);
 
-  const { height } = Dimensions.get('window');
-  // 60 header + 64 stats + 52 legend = 176
-  const mapHeight = Math.max(height - 176, 320);
 
   const counts = {
     confirmado: entregas.filter(e => e.estado === 'confirmado').length,
@@ -99,8 +85,13 @@ export default function MapaRutaScreen({ route }: Props) {
   };
 
   useEffect(() => {
-    cargarLeaflet(() => {
-      const L = (window as any).L;
+    const controller = new AbortController();
+    let activo = true;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    setRuta(null);
+    setErrorRuta(null);
+    setCalculando(paradas.length > 0);
+    {
       if (!L || !mapDivRef.current || mapRef.current) return;
 
       const map = L.map(mapDivRef.current).setView(BODEGA, 13);
@@ -140,7 +131,7 @@ export default function MapaRutaScreen({ route }: Props) {
         });
 
         const coordTag = e.cliente_lat != null
-          ? `<div style="font-size:10px;color:#aaa;margin-top:2px">${e.cliente_lat.toFixed(4)}, ${e.cliente_lng!.toFixed(4)}</div>`
+          ? `<div style="font-size:10px;color:#aaa;margin-top:2px">${Number(e.cliente_lat).toFixed(4)}, ${Number(e.cliente_lng).toFixed(4)}</div>`
           : `<div style="font-size:10px;color:#aaa;margin-top:2px">coords aprox. de ${e.cliente_zona}</div>`;
 
         L.marker(coords, { icon })
@@ -163,15 +154,38 @@ export default function MapaRutaScreen({ route }: Props) {
               </div>
             </div>`);
       });
-    });
+      if (entregas.length) map.fitBounds(L.latLngBounds([BODEGA, ...entregas.map(getCoords)]), { padding: [35, 35], maxZoom: 15 });
+      if (paradas.length) {
+        timeout = setTimeout(() => controller.abort(), 15000);
+        calcularRuta([BODEGA, ...paradas.map(({ entrega, indice }) => getCoords(entrega, indice))], controller.signal)
+          .then(resultado => {
+            if (!activo) return;
+            setRuta(resultado);
+            const linea = L.polyline(resultado.puntos, { color: '#2563EB', weight: 5, opacity: 0.85 }).addTo(map);
+            linea.bindTooltip('Recorrido por calles desde la bodega');
+            map.fitBounds(linea.getBounds(), { padding: [35, 35], maxZoom: 15 });
+          })
+          .catch(err => {
+            if (activo) setErrorRuta(err.name === 'AbortError' ? 'El cálculo tardó demasiado. Intenta de nuevo.' : err.message);
+          })
+          .finally(() => {
+            clearTimeout(timeout);
+            if (activo) setCalculando(false);
+          });
+      }
+
+    }
 
     return () => {
+      activo = false;
+      clearTimeout(timeout);
+      controller.abort();
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
       }
     };
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [entregas, reintento]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -185,6 +199,13 @@ export default function MapaRutaScreen({ route }: Props) {
         <View style={{ width: 38 }} />
       </View>
 
+      <FiltroFechaEntregas />
+      <View style={{ paddingHorizontal: 14, paddingVertical: 8, flexDirection: 'row', gap: 8 }}>
+        <Text style={{ flex: 1, color: error ? COLORS.error : COLORS.textLight }}>
+          {error || (cargando ? 'Actualizando entregas…' : entregas.length ? `${entregas.length} pedidos en esta fecha` : 'Sin pedidos para esta fecha')}
+        </Text>
+        <TouchableOpacity onPress={cargarEntregas} disabled={cargando}><Text style={{ color: COLORS.primary }}>Actualizar</Text></TouchableOpacity>
+      </View>
       {/* Contadores por estado */}
       <View style={styles.statsBar}>
         {(['confirmado', 'despachado', 'entregado', 'cancelado'] as const).map((estado, i, arr) => (
@@ -200,8 +221,24 @@ export default function MapaRutaScreen({ route }: Props) {
         ))}
       </View>
 
+      <View style={{ paddingHorizontal: 14, paddingVertical: 10, gap: 4, backgroundColor: '#EFF6FF' }}>
+        <Text style={{ color: COLORS.text, fontWeight: '700' }}>
+          {calculando ? 'Calculando recorrido por calles…' : ruta
+            ? `${(ruta.distancia / 1000).toFixed(1)} km · ${Math.max(1, Math.round(ruta.duracion / 60))} min aprox. en vehículo`
+            : paradas.length ? 'Recorrido no disponible' : 'Sin entregas pendientes para recorrer'}
+        </Text>
+        {paradas.length > 0 && <Text style={{ color: COLORS.textLight, fontSize: 12 }}>
+          Bodega → {paradas.map(({ indice }) => `Parada ${indice + 1}`).join(' → ')}
+        </Text>}
+        {aproximadas && <Text style={{ color: '#92400E', fontSize: 12 }}>Ruta aproximada: hay clientes sin coordenadas guardadas. Confirma su ubicación antes de salir.</Text>}
+        {ruta && <Text style={{ color: COLORS.textLight, fontSize: 11 }}>Desde la bodega configurada · Sin tráfico en tiempo real</Text>}
+        {errorRuta && <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Text style={{ color: COLORS.error, flex: 1, fontSize: 12 }}>{errorRuta}</Text>
+          <TouchableOpacity onPress={() => setReintento(n => n + 1)}><Text style={{ color: COLORS.primary }}>Reintentar</Text></TouchableOpacity>
+        </View>}
+      </View>
       {/* Mapa — div nativo para Leaflet */}
-      <div ref={mapDivRef} style={{ width: '100%', height: mapHeight }} />
+      <div ref={mapDivRef} style={{ width: '100%', flex: 1, minHeight: 180 }} />
 
       {/* Leyenda */}
       <View style={styles.legend}>

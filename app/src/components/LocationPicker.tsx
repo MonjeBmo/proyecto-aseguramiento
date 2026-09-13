@@ -5,6 +5,7 @@ import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { COLORS } from '../constants/colors';
 
 interface Props {
+  zona?: string;
   lat: string;
   lng: string;
   onChangeLat: (v: string) => void;

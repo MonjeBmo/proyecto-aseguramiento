@@ -1,17 +1,19 @@
-import React, { useState, useMemo } from 'react';
+import { obtenerProductos } from '../services/apiService';
+import { normalizarBusqueda } from '../utils/busqueda';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  SafeAreaView, Alert, ScrollView,
+  SafeAreaView, Alert, ScrollView, TextInput,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useApp } from '../context/AppContext';
 import { guardarPedido } from '../database/pedidosQueries';
 import { sincronizarPedidoInmediato, CartItem } from '../services/syncService';
-import { MOCK_CLIENTES, MOCK_PRODUCTOS, Cliente, Producto } from '../data/mockData';
+import { MOCK_CLIENTES, Cliente, Producto } from '../data/mockData';
 import OfflineBanner from '../components/OfflineBanner';
 import ProductCard from '../components/ProductCard';
 import PrimaryButton from '../components/PrimaryButton';
@@ -35,6 +37,31 @@ export default function CapturaPedidoScreen() {
   const navigation = useNavigation<NavProp>();
   const { usuario, isOnline, setUsuario } = useApp();
 
+  const [mensajeGuardado, setMensajeGuardado] = useState('');
+  const [errorGuardado, setErrorGuardado] = useState('');
+  const [revisionStock, setRevisionStock] = useState(0);
+  const envioEnCurso = useRef(false);
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [busqueda, setBusqueda] = useState('');
+  const [categoria, setCategoria] = useState<string | null>(null);
+  const [cargandoProductos, setCargandoProductos] = useState(false);
+  const [errorProductos, setErrorProductos] = useState<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    let activo = true;
+    setCargandoProductos(true);
+    setErrorProductos(null);
+    obtenerProductos().then(data => {
+      if (activo) setProductos(data.map(p => ({ ...p, precio: Number(p.precio), stock: Number(p.stock) })));
+    }).catch(() => {
+      if (activo) setErrorProductos('No se pudo actualizar el stock. Las cantidades previamente cargadas pueden haber cambiado.');
+    }).finally(() => { if (activo) setCargandoProductos(false); });
+    return () => { activo = false; };
+  }, [isOnline, revisionStock]));
+  const categorias = useMemo(() => Array.from(new Set(productos.map(p => p.categoria))).sort(), [productos]);
+  const productosFiltrados = productos.filter(p =>
+    (categoria === null || p.categoria === categoria) &&
+    normalizarBusqueda(`${p.nombre} ${p.descripcion || ''} ${p.categoria || ''}`).includes(normalizarBusqueda(busqueda))
+  );
   const [paso, setPaso] = useState<Paso>('cliente');
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
   const [carrito, setCarrito] = useState<Map<number, CartItem>>(new Map());
@@ -95,9 +122,11 @@ export default function CapturaPedidoScreen() {
   };
 
   const handleConfirmarPedido = async () => {
-    if (!clienteSeleccionado || !usuario || itemsCarrito.length === 0) return;
+    if (envioEnCurso.current || guardando || !clienteSeleccionado || !usuario || itemsCarrito.length === 0) return;
 
+    envioEnCurso.current = true;
     setGuardando(true);
+    setErrorGuardado('');
     try {
       const localId = await guardarPedido({
         cliente_id: clienteSeleccionado.id,
@@ -110,18 +139,27 @@ export default function CapturaPedidoScreen() {
         creado_en: new Date().toISOString(),
       });
 
+      let pedidoId = localId;
+      let sincronizado = false;
       if (isOnline) {
-        await sincronizarPedidoInmediato(localId, {
+        const serverId = await sincronizarPedidoInmediato(localId, {
           cliente_id: clienteSeleccionado.id,
           vendedor_id: usuario.id,
           items: itemsCarrito,
         });
+        if (serverId !== null) {
+          pedidoId = serverId;
+          sincronizado = true;
+        }
       }
 
-      navigation.navigate('Confirmacion', { pedidoId: localId, estaOnline: isOnline });
+      resetForm();
+      setMensajeGuardado(sincronizado ? `Pedido #${pedidoId} enviado. Selecciona la tienda para un nuevo pedido.` : `Pedido local #${pedidoId} guardado, pendiente de envío. Puedes crear otro pedido.`);
+      setRevisionStock(n => n + 1);
     } catch (err) {
-      Alert.alert('Error', 'No se pudo guardar el pedido. Intenta de nuevo.');
+      setErrorGuardado('No se pudo guardar el pedido. Intenta de nuevo.');
     } finally {
+      envioEnCurso.current = false;
       setGuardando(false);
     }
   };
@@ -130,6 +168,8 @@ export default function CapturaPedidoScreen() {
     setPaso('cliente');
     setClienteSeleccionado(null);
     setCarrito(new Map());
+    setBusqueda('');
+    setCategoria(null);
   };
 
   // ── Render por paso ───────────────────────────────────────────────────────
@@ -164,8 +204,26 @@ export default function CapturaPedidoScreen() {
   );
 
   const renderPasoProductos = () => (
+    <View style={{ flex: 1 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, margin: 12, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface }}>
+        <Ionicons name="search-outline" size={18} color={COLORS.textLight} />
+        <TextInput accessibilityLabel="Buscar productos para el pedido" placeholder="Buscar producto o categoría…" placeholderTextColor={COLORS.textLight}
+          value={busqueda} onChangeText={setBusqueda} style={{ flex: 1, fontSize: 15, color: COLORS.text }} />
+        {!!busqueda && <TouchableOpacity accessibilityLabel="Limpiar búsqueda" onPress={() => setBusqueda('')}><Ionicons name="close-circle" size={20} color={COLORS.textLight} /></TouchableOpacity>}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 8, gap: 8, alignItems: 'center' }}>
+        {[null, ...categorias].map(c => <TouchableOpacity key={c ?? '__todos'} onPress={() => setCategoria(c)}
+          accessibilityRole="button" accessibilityState={{ selected: c === categoria }}
+          style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, backgroundColor: c === categoria ? COLORS.primary : COLORS.surface }}>
+          <Text style={{ color: c === categoria ? '#fff' : COLORS.textLight, fontWeight: '600' }}>{c ?? 'Todos'}</Text>
+        </TouchableOpacity>)}
+      </ScrollView>
+      {errorProductos && <Text style={{ color: COLORS.error, paddingHorizontal: 16, paddingVertical: 8 }}>{errorProductos}</Text>}
+      <Text style={{ color: COLORS.textLight, paddingHorizontal: 16, fontSize: 12 }}>{cargandoProductos ? 'Actualizando stock…' : `${productosFiltrados.length} de ${productos.length} productos`}</Text>
     <FlatList
-      data={MOCK_PRODUCTOS}
+      data={productosFiltrados}
+      extraData={carrito}
+      ListEmptyComponent={<Text style={{ padding: 16, color: COLORS.textLight }}>{cargandoProductos ? 'Cargando productos…' : 'No se encontraron productos.'}</Text>}
       keyExtractor={(item) => item.id.toString()}
       contentContainerStyle={styles.lista}
       ListHeaderComponent={
@@ -187,6 +245,7 @@ export default function CapturaPedidoScreen() {
         />
       )}
     />
+    </View>
   );
 
   const renderPasoResumen = () => (
@@ -272,6 +331,10 @@ export default function CapturaPedidoScreen() {
           <Text style={styles.headerSub}>{usuario?.nombre}</Text>
         </View>
         <View style={styles.headerRight}>
+          <TouchableOpacity accessibilityLabel="Mis pedidos" onPress={() => navigation.navigate('MisPedidos')} style={styles.btnCatalogo}>
+            <Ionicons name="receipt-outline" size={18} color={COLORS.primary} />
+            <Text style={styles.btnCatalogoTexto}>Pedidos</Text>
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => navigation.navigate('Catalogo')} style={styles.btnCatalogo}>
             <Ionicons name="list-outline" size={20} color={COLORS.primary} />
             <Text style={styles.btnCatalogoTexto}>Catalogo</Text>
@@ -308,6 +371,11 @@ export default function CapturaPedidoScreen() {
         ))}
       </View>
 
+      {!!mensajeGuardado && <View style={{ padding: 12, backgroundColor: '#E8F5E9', flexDirection: 'row', gap: 8 }}>
+        <Text style={{ flex: 1, color: COLORS.success }}>{mensajeGuardado}</Text>
+        <TouchableOpacity accessibilityLabel="Cerrar confirmación" onPress={() => setMensajeGuardado('')}><Ionicons name="close" size={20} color={COLORS.success} /></TouchableOpacity>
+      </View>}
+      {!!errorGuardado && <Text style={{ padding: 12, color: COLORS.error }}>{errorGuardado}</Text>}
       {/* Contenido del paso */}
       <View style={styles.contenido}>
         {paso === 'cliente' && renderPasoCliente()}

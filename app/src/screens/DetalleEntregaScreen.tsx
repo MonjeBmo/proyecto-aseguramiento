@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, SafeAreaView,
-  Alert, TouchableOpacity,
+  Modal, TouchableOpacity,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useNavigation } from '@react-navigation/native';
@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { useApp } from '../context/AppContext';
 import { Entrega } from '../data/mockData';
-import { actualizarEstadoEntrega, NuevoEstado } from '../services/entregasApiService';
+import { actualizarEstadoEntrega, obtenerMisEntregas, NuevoEstado } from '../services/entregasApiService';
 import OfflineBanner from '../components/OfflineBanner';
 import PrimaryButton from '../components/PrimaryButton';
 import { COLORS } from '../constants/colors';
@@ -31,69 +31,71 @@ type Props = NativeStackScreenProps<RootStackParamList, 'DetalleEntrega'>;
  */
 export default function DetalleEntregaScreen({ route }: Props) {
   const navigation = useNavigation();
-  const { usuario } = useApp();
+  const { usuario, actualizarEntregas } = useApp();
 
   const [entrega, setEntrega] = useState<Entrega>(route.params.entrega);
   const [actualizando, setActualizando] = useState(false);
+  const [confirmando, setConfirmando] = useState<NuevoEstado | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [exito, setExito] = useState<NuevoEstado | null>(null);
 
   const esTerminal = entrega.estado === 'entregado' || entrega.estado === 'cancelado';
 
-  const handleActualizar = async (nuevoEstado: NuevoEstado) => {
-    if (!usuario) return;
+  const CONFIRM_INFO: Record<NuevoEstado, { titulo: string; cuerpo: string; colorBtn: string; labelBtn: string }> = {
+    despachado: {
+      titulo: 'Salir a entregar',
+      cuerpo: `Confirmas que vas en camino a "${entrega.cliente_nombre}"?`,
+      colorBtn: COLORS.primary,
+      labelBtn: 'Confirmar',
+    },
+    entregado: {
+      titulo: 'Marcar como entregado',
+      cuerpo: `Confirmas que el pedido fue entregado a "${entrega.cliente_nombre}"?\n\nSe enviara una notificacion simulada al cliente.`,
+      colorBtn: COLORS.success,
+      labelBtn: 'Confirmar entrega',
+    },
+    cancelado: {
+      titulo: 'No se pudo entregar',
+      cuerpo: `Confirmas que no fue posible entregar el pedido a "${entrega.cliente_nombre}"?\n\nSe notificara al cliente para reprogramar.`,
+      colorBtn: COLORS.error,
+      labelBtn: 'Confirmar cancelacion',
+    },
+  };
 
-    const mensajes: Record<NuevoEstado, { titulo: string; cuerpo: string }> = {
-      despachado: {
-        titulo: 'Salir a entregar',
-        cuerpo: `Confirmas que vas en camino a "${entrega.cliente_nombre}"?`,
-      },
-      entregado: {
-        titulo: 'Marcar como entregado',
-        cuerpo: `Confirmas que el pedido fue entregado a "${entrega.cliente_nombre}"?\n\nSe enviara una notificacion simulada al cliente.`,
-      },
-      cancelado: {
-        titulo: 'No se pudo entregar',
-        cuerpo: `Confirmas que no fue posible entregar el pedido a "${entrega.cliente_nombre}"?\n\nSe notificara al cliente para reprogramar.`,
-      },
-    };
-
-    const { titulo, cuerpo } = mensajes[nuevoEstado];
-
-    Alert.alert(titulo, cuerpo, [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Confirmar',
-        style: nuevoEstado === 'cancelado' ? 'destructive' : 'default',
-        onPress: async () => {
-          setActualizando(true);
-          try {
-            await actualizarEstadoEntrega(entrega.id, nuevoEstado, usuario.id);
-            setEntrega((prev) => ({ ...prev, estado: nuevoEstado }));
-
-            if (nuevoEstado === 'entregado') {
-              Alert.alert(
-                'Entrega completada',
-                `El cliente "${entrega.cliente_nombre}" fue notificado por WhatsApp (simulado).`,
-                [{ text: 'Volver a mi ruta', onPress: () => navigation.goBack() }]
-              );
-            } else if (nuevoEstado === 'cancelado') {
-              Alert.alert(
-                'Entrega cancelada',
-                `Se registro el intento fallido. El cliente sera contactado.`,
-                [{ text: 'Volver a mi ruta', onPress: () => navigation.goBack() }]
-              );
+  const confirmarAccion = async () => {
+    if (!usuario || !confirmando || actualizando) return;
+    setActualizando(true);
+    setErrorMsg(null);
+    try {
+      const resultado = await actualizarEstadoEntrega(entrega.id, confirmando, usuario.id);
+      setEntrega((prev) => ({ ...prev, estado: resultado.estado }));
+      actualizarEntregas();
+      setExito(confirmando);
+      setConfirmando(null);
+    } catch (err: any) {
+      // Una pantalla antigua puede intentar repetir una entrega ya completada.
+      if (err?.status === 409) {
+        try {
+          const actual = (await obtenerMisEntregas(usuario.id)).find(e => e.id === entrega.id);
+          if (actual) {
+            setEntrega(actual);
+            actualizarEntregas();
+            if (actual.estado === 'entregado' || actual.estado === 'cancelado') {
+              setExito(actual.estado);
+              setConfirmando(null);
+              return;
             }
-          } catch (err: any) {
-            const mensaje =
-              err?.status === 409
-                ? 'Esta transicion de estado no es valida.'
-                : err?.message || 'No se pudo actualizar el estado. Verifica tu conexion.';
-            Alert.alert('Error', mensaje);
-          } finally {
-            setActualizando(false);
           }
-        },
-      },
-    ]);
+        } catch { /* Mantener visible el error de la operación. */ }
+      }
+      setErrorMsg(
+        err?.status === 409
+          ? 'Esta transicion de estado no es valida.'
+          : err?.message || 'No se pudo actualizar el estado. Verifica tu conexion.'
+      );
+    } finally {
+      setActualizando(false);
+    }
   };
 
   const estadoConfig = {
@@ -106,6 +108,36 @@ export default function DetalleEntregaScreen({ route }: Props) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Modal de confirmacion inline (funciona en web y nativo) */}
+      <Modal visible={confirmando !== null} transparent animationType="fade" onRequestClose={() => { if (!actualizando) setConfirmando(null); }}>
+        <View style={styles.overlay}>
+          <View style={styles.confirmCard}>
+            <Text style={styles.confirmTitulo}>{confirmando ? CONFIRM_INFO[confirmando].titulo : ''}</Text>
+            <Text style={styles.confirmCuerpo}>{confirmando ? CONFIRM_INFO[confirmando].cuerpo : ''}</Text>
+            {errorMsg && (
+              <View style={styles.errorInline}>
+                <Ionicons name="alert-circle-outline" size={14} color={COLORS.error} />
+                <Text style={styles.errorInlineTexto}>{errorMsg}</Text>
+              </View>
+            )}
+            <View style={styles.confirmBtns}>
+              <TouchableOpacity style={styles.confirmBtnCancelar} onPress={() => { setConfirmando(null); setErrorMsg(null); }} disabled={actualizando}>
+                <Text style={styles.confirmBtnCancelarTexto}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtnOk, { backgroundColor: confirmando ? CONFIRM_INFO[confirmando].colorBtn : COLORS.primary }, actualizando && { opacity: 0.6 }]}
+                onPress={confirmarAccion}
+                disabled={actualizando}
+              >
+                <Text style={styles.confirmBtnOkTexto}>
+                  {actualizando ? 'Procesando…' : (confirmando ? CONFIRM_INFO[confirmando].labelBtn : '')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <OfflineBanner />
 
       {/* Header */}
@@ -116,6 +148,19 @@ export default function DetalleEntregaScreen({ route }: Props) {
         <Text style={styles.headerTitulo} numberOfLines={1}>Detalle de entrega</Text>
         <View style={{ width: 38 }} />
       </View>
+
+      {/* Banner de exito */}
+      {exito && (
+        <View style={[styles.exitoBanner, { backgroundColor: exito === 'cancelado' ? COLORS.error + '18' : '#D1FAE5' }]}>
+          <Ionicons name={exito === 'cancelado' ? 'close-circle' : 'checkmark-circle'} size={16} color={exito === 'cancelado' ? COLORS.error : '#10B981'} />
+          <Text style={[styles.exitoTexto, { color: exito === 'cancelado' ? COLORS.error : '#065F46' }]}>
+            {exito === 'entregado' ? 'Entrega completada. Cliente notificado (simulado).' : exito === 'cancelado' ? 'Entrega cancelada. Se notificara al cliente.' : 'Estado actualizado.'}
+          </Text>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={[styles.exitoLink, { color: exito === 'cancelado' ? COLORS.error : '#065F46' }]}>Volver</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <ScrollView contentContainerStyle={styles.contenido}>
 
@@ -196,7 +241,7 @@ export default function DetalleEntregaScreen({ route }: Props) {
           {entrega.estado === 'confirmado' && (
             <PrimaryButton
               titulo="Salir a entregar"
-              onPress={() => handleActualizar('despachado')}
+              onPress={() => setConfirmando('despachado')}
               cargando={actualizando}
             />
           )}
@@ -205,12 +250,12 @@ export default function DetalleEntregaScreen({ route }: Props) {
             <>
               <PrimaryButton
                 titulo="Marcar como entregado"
-                onPress={() => handleActualizar('entregado')}
+                onPress={() => setConfirmando('entregado')}
                 cargando={actualizando}
               />
               <TouchableOpacity
                 style={styles.btnCancelar}
-                onPress={() => handleActualizar('cancelado')}
+                onPress={() => setConfirmando('cancelado')}
                 disabled={actualizando}
               >
                 <Ionicons name="close-circle-outline" size={18} color={COLORS.error} />
@@ -303,4 +348,40 @@ const styles = StyleSheet.create({
     gap: 6, paddingVertical: 12,
   },
   btnCancelarTexto: { fontSize: 15, fontWeight: '700', color: COLORS.error },
+
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center', alignItems: 'center', padding: 24,
+  },
+  confirmCard: {
+    backgroundColor: COLORS.surface, borderRadius: 16,
+    padding: 24, width: '100%', maxWidth: 400,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18, shadowRadius: 16, elevation: 10,
+  },
+  confirmTitulo: { fontSize: 18, fontWeight: '800', color: COLORS.text, marginBottom: 10 },
+  confirmCuerpo: { fontSize: 14, color: COLORS.textLight, lineHeight: 21, marginBottom: 20 },
+  errorInline: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: COLORS.error + '15', borderRadius: 8, padding: 10, marginBottom: 16,
+  },
+  errorInlineTexto: { flex: 1, fontSize: 13, color: COLORS.error },
+  confirmBtns: { flexDirection: 'row', gap: 10 },
+  confirmBtnCancelar: {
+    flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center',
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  confirmBtnCancelarTexto: { fontSize: 15, fontWeight: '600', color: COLORS.textLight },
+  confirmBtnOk: {
+    flex: 2, borderRadius: 10, paddingVertical: 13, alignItems: 'center',
+  },
+  confirmBtnOkTexto: { fontSize: 15, fontWeight: '700', color: '#fff' },
+
+  exitoBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: '#6EE7B7',
+  },
+  exitoTexto: { flex: 1, fontSize: 13, fontWeight: '600' },
+  exitoLink: { fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' },
 });

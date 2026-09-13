@@ -65,9 +65,9 @@ export default function ConfirmacionScreen({ route }: Props) {
           </Text>
         </View>
 
-        {/* ID del pedido local */}
+        {/* ID del pedido */}
         <View style={styles.idRow}>
-          <Text style={styles.idLabel}>ID local del pedido</Text>
+          <Text style={styles.idLabel}>{estaOnline ? 'Pedido confirmado' : 'ID local del pedido'}</Text>
           <Text style={styles.idValor}>#{pedidoId}</Text>
         </View>
 
@@ -86,7 +86,7 @@ export default function ConfirmacionScreen({ route }: Props) {
       <View style={styles.acciones}>
         <TouchableOpacity
           style={styles.btnNuevoPedido}
-          onPress={() => navigation.navigate('CapturaPedido')}
+          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'CapturaPedido' }] })}
           activeOpacity={0.8}
         >
           <Ionicons name="add-circle-outline" size={20} color={COLORS.textOnDark} />

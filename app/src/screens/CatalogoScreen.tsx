@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import { obtenerProductos } from '../services/apiService';
+import { normalizarBusqueda } from '../utils/busqueda';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput,
-  SafeAreaView, TouchableOpacity,
+  SafeAreaView, TouchableOpacity, RefreshControl,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { MOCK_PRODUCTOS, Producto } from '../data/mockData';
+import { Producto } from '../data/mockData';
 import OfflineBanner from '../components/OfflineBanner';
 import { COLORS } from '../constants/colors';
 
@@ -20,13 +22,32 @@ import { COLORS } from '../constants/colors';
  */
 export default function CatalogoScreen() {
   const navigation = useNavigation();
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      const data = await obtenerProductos();
+      setProductos(data.map(p => ({ ...p, precio: Number(p.precio), stock: Number(p.stock) })));
+    } catch {
+      setProductos([]);
+      setError('No se pudo consultar el stock actual. Revisa la conexión e intenta actualizar.');
+    } finally { setCargando(false); }
+  }, []);
+  useFocusEffect(useCallback(() => {
+    cargar();
+    const timer = setInterval(cargar, 30000);
+    return () => clearInterval(timer);
+  }, [cargar]));
   const [busqueda, setBusqueda] = useState('');
   const [categoriaFiltro, setCategoriaFiltro] = useState<string | null>(null);
 
-  const categorias = Array.from(new Set(MOCK_PRODUCTOS.map((p) => p.categoria))).sort();
+  const categorias = Array.from(new Set(productos.map((p) => p.categoria))).sort();
 
-  const productosFiltrados = MOCK_PRODUCTOS.filter((p) => {
-    const coincideBusqueda = p.nombre.toLowerCase().includes(busqueda.toLowerCase());
+  const productosFiltrados = productos.filter((p) => {
+    const coincideBusqueda = normalizarBusqueda(`${p.nombre} ${p.descripcion || ""} ${p.categoria || ""}`).includes(normalizarBusqueda(busqueda));
     const coincideCategoria = categoriaFiltro === null || p.categoria === categoriaFiltro;
     return coincideBusqueda && coincideCategoria;
   });
@@ -86,9 +107,14 @@ export default function CatalogoScreen() {
         )}
       </View>
 
+      {error && <Text style={{ paddingHorizontal: 16, paddingBottom: 10, color: COLORS.error }}>{error}</Text>}
+      <TouchableOpacity onPress={cargar} disabled={cargando} style={{ alignSelf: 'flex-end', paddingHorizontal: 16, paddingBottom: 10 }}>
+        <Text style={{ color: COLORS.primary }}>{cargando ? 'Actualizando stock…' : 'Actualizar stock'}</Text>
+      </TouchableOpacity>
       {/* Filtros de categoria */}
       <FlatList
         horizontal
+        style={{ flexGrow: 0, flexShrink: 0, minHeight: 48 }}
         data={[null, ...categorias]}
         keyExtractor={(item) => item ?? '__todos'}
         showsHorizontalScrollIndicator={false}
@@ -108,13 +134,14 @@ export default function CatalogoScreen() {
       {/* Lista de productos */}
       <FlatList
         data={productosFiltrados}
+        refreshControl={<RefreshControl refreshing={cargando} onRefresh={cargar} colors={[COLORS.primary]} />}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderProducto}
         contentContainerStyle={styles.lista}
         ListEmptyComponent={
           <View style={styles.vacio}>
             <Ionicons name="cube-outline" size={48} color={COLORS.border} />
-            <Text style={styles.vacioTexto}>No se encontraron productos</Text>
+            <Text style={styles.vacioTexto}>{cargando ? 'Cargando productos…' : error ? 'Stock no disponible' : 'No se encontraron productos'}</Text>
           </View>
         }
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
@@ -143,9 +170,9 @@ const styles = StyleSheet.create({
   },
   buscadorInput: { flex: 1, fontSize: 15, color: COLORS.text },
 
-  filtrosRow: { paddingHorizontal: 16, paddingBottom: 12, gap: 8 },
+  filtrosRow: { paddingHorizontal: 16, paddingBottom: 12, gap: 8, alignItems: 'center' },
   filtroChip: {
-    paddingHorizontal: 14, paddingVertical: 6,
+    paddingHorizontal: 14, paddingVertical: 8, minHeight: 36, justifyContent: 'center',
     borderRadius: 20, backgroundColor: COLORS.surface,
     borderWidth: 1.5, borderColor: COLORS.border,
   },

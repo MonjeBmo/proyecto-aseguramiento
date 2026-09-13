@@ -102,36 +102,42 @@ async function crearPedido({ cliente_id, vendedor_id, items }) {
 /**
  * Devuelve todos los pedidos con nombre de cliente y vendedor.
  */
-async function obtenerPedidos() {
+async function obtenerPedidos(vendedorId = null) {
   const { rows } = await pool.query(`
     SELECT
       p.id,
       p.estado,
       p.total,
       p.creado_en,
+      to_char(p.fecha_entrega, 'YYYY-MM-DD') AS fecha_entrega,
       p.sincronizado_en,
+      p.repartidor_id,
+      r.nombre AS repartidor_nombre,
       c.nombre AS cliente_nombre,
       c.zona   AS cliente_zona,
       u.nombre AS vendedor_nombre
     FROM pedidos p
     JOIN clientes c ON p.cliente_id = c.id
     JOIN usuarios u ON p.vendedor_id = u.id
+    LEFT JOIN usuarios r ON p.repartidor_id = r.id
+    WHERE ($1::integer IS NULL OR p.vendedor_id = $1)
     ORDER BY p.creado_en DESC
-  `);
+  `, [vendedorId]);
   return rows;
 }
 
 /**
  * Devuelve el detalle de un pedido con sus items.
  */
-async function obtenerPedidoPorId(id) {
+async function obtenerPedidoPorId(id, vendedorId = null) {
   const { rows: pedidoRows } = await pool.query(
-    `SELECT p.*, c.nombre AS cliente_nombre, u.nombre AS vendedor_nombre
+    `SELECT p.*, to_char(p.fecha_entrega, 'YYYY-MM-DD') AS fecha_entrega, c.nombre AS cliente_nombre, c.zona AS cliente_zona, u.nombre AS vendedor_nombre, r.nombre AS repartidor_nombre
      FROM pedidos p
      JOIN clientes c ON p.cliente_id = c.id
      JOIN usuarios u ON p.vendedor_id = u.id
-     WHERE p.id = $1`,
-    [id]
+    LEFT JOIN usuarios r ON p.repartidor_id = r.id
+     WHERE p.id = $1 AND ($2::integer IS NULL OR p.vendedor_id = $2)`,
+    [id, vendedorId]
   );
 
   if (pedidoRows.length === 0) return null;

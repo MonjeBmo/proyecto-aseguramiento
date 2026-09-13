@@ -13,9 +13,11 @@ async function listar(req, res) {
   const { rows } = await pool.query(
     `SELECT l.*,
             p.nombre AS producto_nombre,
+            pr.nombre AS proveedor_nombre,
             p.unidad
      FROM lotes l
      JOIN productos p ON l.producto_id = p.id
+     LEFT JOIN proveedores pr ON l.proveedor_id = pr.id
      WHERE l.producto_id = $1
      ORDER BY l.fecha_entrada ASC, l.id ASC`,
     [producto_id]
@@ -30,12 +32,19 @@ async function listar(req, res) {
  * Actualiza el stock total del producto.
  */
 async function crear(req, res) {
-  const { producto_id, cantidad, costo_unitario, fecha_entrada, notas } = req.body;
+  const { producto_id, cantidad, costo_unitario, fecha_entrada, notas, proveedor_id } = req.body;
 
   if (!producto_id || !cantidad || parseInt(cantidad, 10) <= 0) {
     return res.status(400).json({ error: 'producto_id y cantidad (> 0) son obligatorios.' });
   }
 
+  const fechaValidar = fecha_entrada == null || fecha_entrada === '' ? null : new Date(`${fecha_entrada}T12:00:00Z`);
+  if (fechaValidar && (typeof fecha_entrada !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(fecha_entrada) || Number.isNaN(fechaValidar.getTime()) || fechaValidar.toISOString().slice(0,10) !== fecha_entrada)) return res.status(400).json({ error: 'Fecha de entrada inválida.' });
+  if (proveedor_id != null) {
+    if (!Number.isInteger(proveedor_id) || proveedor_id <= 0) return res.status(400).json({ error: 'Proveedor inválido.' });
+    const proveedor = await pool.query('SELECT id FROM proveedores WHERE id=$1', [proveedor_id]);
+    if (!proveedor.rows.length) return res.status(400).json({ error: 'Proveedor no encontrado.' });
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -53,10 +62,10 @@ async function crear(req, res) {
     const fechaEntrada = fecha_entrada || new Date().toISOString().split('T')[0];
 
     const { rows: lote } = await client.query(
-      `INSERT INTO lotes (producto_id, cantidad_inicial, cantidad_disponible, costo_unitario, fecha_entrada, notas)
-       VALUES ($1, $2, $2, $3, $4, $5)
+      `INSERT INTO lotes (producto_id, cantidad_inicial, cantidad_disponible, costo_unitario, fecha_entrada, notas, proveedor_id)
+       VALUES ($1, $2, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [producto_id, cantidadInt, costo_unitario || null, fechaEntrada, notas || null]
+      [producto_id, cantidadInt, costo_unitario ?? null, fechaEntrada, notas || null, proveedor_id ?? null]
     );
 
     // Incrementar stock del producto

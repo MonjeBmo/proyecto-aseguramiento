@@ -34,7 +34,7 @@ export async function actualizarEstadoEntrega(
   pedidoId: number,
   nuevoEstado: NuevoEstado,
   repartidorId: number
-): Promise<{ id: number; estado: string }> {
+): Promise<{ id: number; estado: Entrega['estado'] }> {
   const res = await fetchWithTimeout(`${API_URL}/api/entregas/${pedidoId}/estado`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

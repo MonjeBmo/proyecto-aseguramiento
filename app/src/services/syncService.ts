@@ -23,9 +23,9 @@ export interface CartItem {
 export async function sincronizarPedidoInmediato(
   localId: number,
   payload: { cliente_id: number; vendedor_id: number; items: CartItem[] }
-): Promise<void> {
+): Promise<number | null> {
   try {
-    await enviarPedido({
+    const respuesta = await enviarPedido({
       cliente_id: payload.cliente_id,
       vendedor_id: payload.vendedor_id,
       items: payload.items.map((item) => ({
@@ -34,10 +34,12 @@ export async function sincronizarPedidoInmediato(
       })),
     });
     await marcarSincronizado(localId);
+    return respuesta.id;
   } catch (err) {
     // No se pudo sincronizar; el pedido queda en estado 'pendiente'
     // y se reintentara cuando el syncService detecte conexion
     console.warn('[Sync] No se pudo sincronizar inmediatamente:', (err as Error).message);
+    return null;
   }
 }
 
