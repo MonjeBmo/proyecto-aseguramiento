@@ -56,19 +56,6 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const SupervisorScreens = () => (
-  <>
-    <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
-    <Stack.Screen name="ProveedoresAdmin" component={ProveedoresAdminScreen} />
-    <Stack.Screen name="ProductosAdmin" component={ProductosAdminScreen} />
-    <Stack.Screen name="ClientesAdmin" component={ClientesAdminScreen} />
-    <Stack.Screen name="PedidosAdmin" component={PedidosAdminScreen} />
-    <Stack.Screen name="Notificaciones" component={NotificacionesScreen} />
-    <Stack.Screen name="UsuariosAdmin" component={UsuariosAdminScreen} />
-    <Stack.Screen name="BitacoraAdmin" component={BitacoraAdminScreen} />
-  </>
-);
-
 export default function AppNavigator() {
   const { usuario, adminOrigen, setUsuario, setAdminOrigen } = useApp();
 
@@ -76,6 +63,8 @@ export default function AppNavigator() {
     setUsuario(adminOrigen);
     setAdminOrigen(null);
   };
+
+  const esSupervisorOAdmin = usuario?.rol === 'supervisor' || usuario?.rol === 'admin';
 
   return (
     <View style={{ flex: 1 }}>
@@ -102,9 +91,20 @@ export default function AppNavigator() {
               <Stack.Screen name="DetalleEntrega" component={DetalleEntregaScreen} />
               <Stack.Screen name="MapaRuta" component={MapaRutaScreen} />
             </>
-          ) : usuario.rol === 'supervisor' || usuario.rol === 'admin' ? (
-            <SupervisorScreens />
-          ) : null}
+          ) : esSupervisorOAdmin ? (
+            <>
+              <Stack.Screen name="AdminDashboard" component={AdminDashboardScreen} />
+              <Stack.Screen name="ProveedoresAdmin" component={ProveedoresAdminScreen} />
+              <Stack.Screen name="ProductosAdmin" component={ProductosAdminScreen} />
+              <Stack.Screen name="ClientesAdmin" component={ClientesAdminScreen} />
+              <Stack.Screen name="PedidosAdmin" component={PedidosAdminScreen} />
+              <Stack.Screen name="Notificaciones" component={NotificacionesScreen} />
+              <Stack.Screen name="UsuariosAdmin" component={UsuariosAdminScreen} />
+              <Stack.Screen name="BitacoraAdmin" component={BitacoraAdminScreen} />
+            </>
+          ) : (
+            <Stack.Screen name="Login" component={LoginScreen} />
+          )}
         </Stack.Navigator>
       </NavigationContainer>
 
