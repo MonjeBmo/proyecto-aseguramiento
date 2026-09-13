@@ -50,6 +50,15 @@ const SCHEMA_SQL = `
     subtotal        NUMERIC(10,2) NOT NULL CHECK (subtotal >= 0)
   );
 
+  CREATE TABLE IF NOT EXISTS proveedores (
+    id SERIAL PRIMARY KEY,
+    nombre TEXT NOT NULL,
+    nit TEXT DEFAULT '',
+    telefono TEXT DEFAULT '',
+    email TEXT DEFAULT '',
+    direccion TEXT DEFAULT ''
+  );
+
   CREATE TABLE IF NOT EXISTS lotes (
     id                  SERIAL PRIMARY KEY,
     producto_id         INTEGER NOT NULL REFERENCES productos(id),
@@ -73,9 +82,31 @@ const SCHEMA_SQL = `
     creado_en  TIMESTAMP DEFAULT NOW()
   );
 
+  ALTER TABLE lotes ADD COLUMN IF NOT EXISTS proveedor_id INTEGER REFERENCES proveedores(id);
+  ALTER TABLE pedidos   ADD COLUMN IF NOT EXISTS fecha_entrega DATE;
   ALTER TABLE pedidos   ADD COLUMN IF NOT EXISTS repartidor_id INTEGER REFERENCES usuarios(id);
   ALTER TABLE clientes  ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
   ALTER TABLE clientes  ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+  ALTER TABLE usuarios  ADD COLUMN IF NOT EXISTS password VARCHAR(255) DEFAULT '1234';
+  UPDATE usuarios SET password = 'admin1234' WHERE rol = 'supervisor' AND (password IS NULL OR password = '1234');
+  UPDATE usuarios SET password = '1234' WHERE password IS NULL;
+
+  -- Ampliar el CHECK de roles para incluir 'admin'
+  ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
+  ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check
+    CHECK (rol IN ('vendedor', 'supervisor', 'repartidor', 'admin'));
+
+  -- Tabla de auditoría de peticiones API
+  CREATE TABLE IF NOT EXISTS bitacora (
+    id          SERIAL PRIMARY KEY,
+    timestamp   TIMESTAMP DEFAULT NOW(),
+    metodo      VARCHAR(10) NOT NULL,
+    ruta        TEXT NOT NULL,
+    usuario_id  INTEGER,
+    estado      INTEGER,
+    duracion_ms INTEGER,
+    ip          TEXT
+  );
 `;
 
 async function initSchema() {

@@ -98,9 +98,36 @@ describe('inventarioService.descontarStock', () => {
     jest.clearAllMocks();
   });
 
-  test('ejecuta UPDATE para cada item', async () => {
+  test('descuenta usando PEPS cuando existen lotes disponibles', async () => {
     const mockClient = pool._mockClient;
-    mockClient.query.mockResolvedValue({ rowCount: 1, rows: [{ id: 1, stock: 140 }] });
+
+    // SELECT lotes devuelve un lote con stock suficiente
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [{ id: 10, cantidad_disponible: 50 }] }) // SELECT lotes
+      .mockResolvedValueOnce({})                                               // UPDATE lotes
+      .mockResolvedValueOnce({});                                              // UPDATE productos stock
+
+    await descontarStock([{ producto_id: 1, cantidad: 10 }], mockClient);
+
+    // Verifica que se actualizó el lote con PEPS
+    expect(mockClient.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE lotes'),
+      [10, 10]
+    );
+    // Verifica que se sincronizó el stock del producto
+    expect(mockClient.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE productos'),
+      [1]
+    );
+  });
+
+  test('descuenta directamente del producto cuando no hay lotes registrados', async () => {
+    const mockClient = pool._mockClient;
+
+    // SELECT lotes devuelve vacío → ruta sin PEPS
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })                                     // SELECT lotes (vacío)
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 1, stock: 140 }] }); // UPDATE productos
 
     await descontarStock([{ producto_id: 1, cantidad: 10 }], mockClient);
 
@@ -110,9 +137,12 @@ describe('inventarioService.descontarStock', () => {
     );
   });
 
-  test('lanza error si UPDATE no afecta filas (race condition)', async () => {
+  test('lanza error si UPDATE directo no afecta filas (race condition sin lotes)', async () => {
     const mockClient = pool._mockClient;
-    mockClient.query.mockResolvedValue({ rowCount: 0, rows: [] });
+
+    mockClient.query
+      .mockResolvedValueOnce({ rows: [] })                    // SELECT lotes (vacío)
+      .mockResolvedValueOnce({ rowCount: 0, rows: [] });      // UPDATE falla → race condition
 
     await expect(
       descontarStock([{ producto_id: 1, cantidad: 50 }], mockClient)

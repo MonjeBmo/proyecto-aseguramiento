@@ -3,10 +3,11 @@ const pool = require('./database');
 const { initSchema } = require('../models/schema');
 
 const USUARIOS = [
-  { nombre: 'Carlos Revolorio',  email: 'carlos@rutaexpress.gt', rol: 'vendedor' },
-  { nombre: 'Maria Garcia',      email: 'maria@rutaexpress.gt',  rol: 'vendedor' },
-  { nombre: 'Admin RutaExpress', email: 'admin@rutaexpress.gt',  rol: 'supervisor' },
-  { nombre: 'Pedro Lopez',       email: 'pedro@rutaexpress.gt',  rol: 'repartidor' },
+  { nombre: 'Carlos Revolorio',  email: 'carlos@rutaexpress.gt',     rol: 'vendedor',    password: '1234' },
+  { nombre: 'Maria Garcia',      email: 'maria@rutaexpress.gt',      rol: 'vendedor',    password: '1234' },
+  { nombre: 'Admin RutaExpress', email: 'admin@rutaexpress.gt',      rol: 'supervisor',  password: 'admin1234' },
+  { nombre: 'Pedro Lopez',       email: 'pedro@rutaexpress.gt',      rol: 'repartidor',  password: '1234' },
+  { nombre: 'Super Admin',       email: 'superadmin@rutaexpress.gt', rol: 'admin',       password: 'super1234' },
 ];
 
 const CLIENTES = [
@@ -37,8 +38,8 @@ async function seed() {
     // ── Usuarios (idempotente via ON CONFLICT) ────────────────────────────────
     for (const u of USUARIOS) {
       await pool.query(
-        'INSERT INTO usuarios (nombre, email, rol) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING',
-        [u.nombre, u.email, u.rol]
+        'INSERT INTO usuarios (nombre, email, rol, password) VALUES ($1, $2, $3, $4) ON CONFLICT (email) DO NOTHING',
+        [u.nombre, u.email, u.rol, u.password]
       );
     }
     console.log(`[Seed] Usuarios: OK`);

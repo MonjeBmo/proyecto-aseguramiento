@@ -184,7 +184,7 @@ describe('POST /api/auth/login', () => {
 
   test('devuelve token y datos del usuario con credenciales validas', async () => {
     pool.query.mockResolvedValueOnce({
-      rows: [{ id: 1, nombre: 'Carlos Revolorio', email: 'carlos@rutaexpress.gt', rol: 'vendedor' }],
+      rows: [{ id: 1, nombre: 'Carlos Revolorio', email: 'carlos@rutaexpress.gt', rol: 'vendedor', password: '1234' }],
     });
 
     const res = await request(app)
@@ -194,9 +194,15 @@ describe('POST /api/auth/login', () => {
     expect(res.status).toBe(200);
     expect(res.body.token).toBeDefined();
     expect(res.body.usuario).toMatchObject({ email: 'carlos@rutaexpress.gt', rol: 'vendedor' });
+    // Verificar que el password NO se incluye en la respuesta (seguridad)
+    expect(res.body.usuario.password).toBeUndefined();
   });
 
   test('devuelve 401 con password incorrecta', async () => {
+    pool.query.mockResolvedValueOnce({
+      rows: [{ id: 1, nombre: 'Carlos Revolorio', email: 'carlos@rutaexpress.gt', rol: 'vendedor', password: '1234' }],
+    });
+
     const res = await request(app)
       .post('/api/auth/login')
       .send({ email: 'carlos@rutaexpress.gt', password: 'wrong' });
@@ -211,5 +217,14 @@ describe('POST /api/auth/login', () => {
       .send({ password: '1234' });
 
     expect(res.status).toBe(400);
+  });
+
+  test('devuelve 400 si el email no tiene formato valido', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'no-es-un-email', password: '1234' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/formato/i);
   });
 });
