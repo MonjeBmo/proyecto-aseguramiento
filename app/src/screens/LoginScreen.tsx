@@ -7,7 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useApp } from '../context/AppContext';
 import { loginApi } from '../services/apiService';
-import { MOCK_USUARIOS, MOCK_CREDENCIALES } from '../data/mockData';
 import { COLORS } from '../constants/colors';
 
 export default function LoginScreen() {
@@ -38,15 +37,8 @@ export default function LoginScreen() {
       const { usuario } = await loginApi(emailLower, password);
       setUsuario(usuario);
     } catch (err: any) {
-      // Si el backend no está disponible, intentar con mock local
       if (err.name === 'AbortError' || err.message?.includes('fetch') || err.message?.includes('network')) {
-        const passEsperado = MOCK_CREDENCIALES[emailLower];
-        const usuarioMock  = MOCK_USUARIOS.find(u => u.email === emailLower);
-        if (passEsperado && passEsperado === password && usuarioMock) {
-          setUsuario(usuarioMock);
-          return;
-        }
-        setError('Sin conexión y las credenciales no coinciden con el modo offline.');
+        setError('No se pudo conectar al servidor. Verifica tu conexión.');
       } else {
         setError(err.message || 'Credenciales incorrectas.');
       }
@@ -131,10 +123,10 @@ export default function LoginScreen() {
             <Text style={styles.demoTitulo}>Accesos rápidos (demo)</Text>
             <View style={styles.demoGrid}>
               {[
-                { label: 'Vendedor',     email: 'carlos@rutaexpress.gt', pass: '1234',      icon: 'storefront-outline' as const },
-                { label: 'Repartidor',   email: 'pedro@rutaexpress.gt',  pass: '1234',      icon: 'bicycle-outline' as const },
-                { label: 'Supervisor',   email: 'admin@rutaexpress.gt',  pass: 'admin1234', icon: 'shield-checkmark-outline' as const },
-                { label: 'Vendedora 2',  email: 'maria@rutaexpress.gt',  pass: '1234',      icon: 'person-outline' as const },
+                { label: 'Vendedor',    email: 'carlos@rutaexpress.gt',     pass: '1234',       icon: 'storefront-outline' as const },
+                { label: 'Repartidor',  email: 'pedro@rutaexpress.gt',      pass: '1234',       icon: 'bicycle-outline' as const },
+                { label: 'Supervisor',  email: 'ana@rutaexpress.gt',         pass: 'super1234',  icon: 'shield-checkmark-outline' as const },
+                { label: 'Admin',       email: 'superadmin@rutaexpress.gt',  pass: 'super1234',  icon: 'key-outline' as const },
               ].map(u => (
                 <TouchableOpacity
                   key={u.email}

@@ -95,6 +95,22 @@ export async function enviarPedido(
   return data.pedido;
 }
 
+// ── Clientes ──────────────────────────────────────────────────────────────────
+
+export interface ClienteAPI {
+  id: number;
+  nombre: string;
+  telefono: string;
+  zona: string;
+  direccion: string;
+}
+
+export async function obtenerClientes(): Promise<ClienteAPI[]> {
+  const res = await fetchWithTimeout(`${API_URL}/api/clientes`);
+  if (!res.ok) throw new Error('No se pudieron obtener los clientes');
+  return res.json();
+}
+
 // ── Health check ──────────────────────────────────────────────────────────────
 
 export async function checkApiHealth(): Promise<boolean> {

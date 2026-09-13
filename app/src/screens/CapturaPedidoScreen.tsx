@@ -1,4 +1,4 @@
-import { obtenerProductos } from '../services/apiService';
+import { obtenerProductos, obtenerClientes, ClienteAPI } from '../services/apiService';
 import { normalizarBusqueda } from '../utils/busqueda';
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
@@ -13,7 +13,7 @@ import { RootStackParamList } from '../navigation/AppNavigator';
 import { useApp } from '../context/AppContext';
 import { guardarPedido } from '../database/pedidosQueries';
 import { sincronizarPedidoInmediato, CartItem } from '../services/syncService';
-import { MOCK_CLIENTES, Cliente, Producto } from '../data/mockData';
+import { Producto } from '../data/mockData';
 import OfflineBanner from '../components/OfflineBanner';
 import ProductCard from '../components/ProductCard';
 import PrimaryButton from '../components/PrimaryButton';
@@ -62,8 +62,23 @@ export default function CapturaPedidoScreen() {
     (categoria === null || p.categoria === categoria) &&
     normalizarBusqueda(`${p.nombre} ${p.descripcion || ''} ${p.categoria || ''}`).includes(normalizarBusqueda(busqueda))
   );
+  const [clientes, setClientes] = useState<ClienteAPI[]>([]);
+  const [cargandoClientes, setCargandoClientes] = useState(false);
+  const [errorClientes, setErrorClientes] = useState<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    let activo = true;
+    setCargandoClientes(true);
+    setErrorClientes(null);
+    obtenerClientes().then(data => {
+      if (activo) setClientes(data);
+    }).catch(() => {
+      if (activo) setErrorClientes('No se pudo cargar la lista de clientes.');
+    }).finally(() => { if (activo) setCargandoClientes(false); });
+    return () => { activo = false; };
+  }, []));
+
   const [paso, setPaso] = useState<Paso>('cliente');
-  const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<ClienteAPI | null>(null);
   const [carrito, setCarrito] = useState<Map<number, CartItem>>(new Map());
   const [guardando, setGuardando] = useState(false);
 
@@ -176,10 +191,15 @@ export default function CapturaPedidoScreen() {
 
   const renderPasoCliente = () => (
     <FlatList
-      data={MOCK_CLIENTES}
+      data={clientes}
       keyExtractor={(item) => item.id.toString()}
       contentContainerStyle={styles.lista}
       ListHeaderComponent={<Text style={styles.instruccion}>Selecciona el cliente al que le vas a vender:</Text>}
+      ListEmptyComponent={
+        <Text style={{ padding: 16, color: COLORS.textLight }}>
+          {cargandoClientes ? 'Cargando clientes…' : errorClientes ?? 'No hay clientes registrados.'}
+        </Text>
+      }
       renderItem={({ item }) => {
         const seleccionado = clienteSeleccionado?.id === item.id;
         return (
