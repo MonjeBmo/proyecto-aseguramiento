@@ -1,10 +1,10 @@
 import { guardarToken } from './sesion';
 import { Usuario } from '../data/mockData';
 
-// Ajusta esta URL con la IP de tu maquina al usar Expo en dispositivo fisico
-// Para emulador Android: http://10.0.2.2:3000
-// Para emulador iOS / dispositivo: http://TU_IP_LOCAL:3000
-const API_URL = 'http://localhost:3000';
+// En web: vacio (rutas relativas; el Worker de Cloudflare proxea /api y /health).
+// En Expo Go / nativo: define EXPO_PUBLIC_API_URL en app/.env
+// (IP local, http://10.0.2.2:3010 en emulador Android, o la URL del tunel).
+const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
 
 const TIMEOUT_MS = 8000;
 

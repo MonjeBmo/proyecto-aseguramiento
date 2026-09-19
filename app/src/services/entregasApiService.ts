@@ -1,6 +1,6 @@
 import { Entrega } from '../data/mockData';
 
-const API_URL = 'http://localhost:3000';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || '';
 const TIMEOUT_MS = 8000;
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {

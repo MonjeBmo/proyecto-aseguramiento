@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:${DB_HOST_PORT:-5434}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -35,12 +35,27 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       JWT_SECRET: ${JWT_SECRET:-dev_secret_change_in_prod}
     ports:
-      - "${PORT:-3000}:3000"
+      - "127.0.0.1:${PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - ./backend/src:/app/src
+
+  # Entrada publica: tunel saliente hacia Cloudflare, sin exponer puertos ni IP.
+  # Activar con: docker compose --profile tunnel up -d
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: rutaexpress_cloudflared
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://backend:3000"]
+    profiles: ["tunnel"]
+    depends_on:
+      backend:
+        condition: service_started
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
 
 volumes:
   postgres_data:
